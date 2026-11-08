@@ -1,0 +1,61 @@
+# ---- 密钥与实盘配置（永不提交） ----
+configs/env/*.toml
+!configs/env/*.example.toml
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+credentials*
+*.secret
+
+# ---- Rust ----
+target/
+**/target/
+*.rs.bk
+*.profraw
+Cargo.lock.bak
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyright/
+*.egg-info/
+dist/
+build/
+coverage.xml
+.coverage
+htmlcov/
+
+# ---- 数据与产物（数据只引用哈希，不入库） ----
+data/
+datasets/
+artifacts/
+reports/
+logs/
+*.parquet
+*.arrow
+*.duckdb
+*.db
+*.sqlite
+*.sqlite3
+
+# ---- 编辑器与工具本地配置 ----
+.claude/settings.local.json
+.idea/
+.vscode/
+*.swp
+*~
+
+# ---- 操作系统 ----
+Thumbs.db
+Desktop.ini
+.DS_Store

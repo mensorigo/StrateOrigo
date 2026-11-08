@@ -1,0 +1,14 @@
+# 统一行尾：仓库内一律 LF，避免 Windows/macOS/Linux 之间 diff 抖动
+* text=auto eol=lf
+
+# Windows 专用脚本保留 CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# 二进制
+*.png binary
+*.jpg binary
+*.ico binary
+*.parquet binary
+*.arrow binary
+*.zip binary
