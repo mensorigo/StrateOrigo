@@ -438,9 +438,9 @@ gRPC 服务（tonic），**只监听内网接口**，mTLS 或 Token 认证，所
 | `Monitor` | `StreamPortfolio`、`StreamPositions`、`StreamOrders`、`StreamFills`、`StreamRisk`、`StreamLatency`、`StreamHealth`（连接/行情质量） | 总览、风控 | `so-cli watch` |
 | `Market` | `GetBars(venue, symbol, interval, from, to)` / `StreamBars(...)`：K 线（含未收盘的当前 Bar）<br/>`GetTrades` / `StreamTrades`：逐笔<br/>`GetBook` / `StreamBook(depth, throttle_ms)`：盘口<br/>`GetIndicators(bars_ref, spec)`：指标序列（MA、布林、VWAP 等，服务端计算）<br/>`GetChartMarkers(strategy, from, to)`：成交点、开平仓、风控事件，用于叠加到 K 线 | 行情（K 线、盘口、逐笔） | `so-cli market bars/book` |
 | `Strategy` | `ListStrategies`、`GetStrategy`（指纹、参数、生命周期状态、晋级记录）、`GetPnlBreakdown`、`GetMarkout`、`StreamDecisions`（决策日志：信号值、预期收益、成本、是否交易及原因） | 策略 | `so-cli strategy` |
-| `Control` | `StartStrategy`、`StopStrategy`、`SetReduceOnly`、`CancelAll`、`KillSwitch`（二次确认） | 策略、风控 | `so-cli trader` / `kill` |
+| `Control` | `StartStrategy`、`StopStrategy`、`SetReduceOnly`、`CancelAll`、`KillSwitch`（二次确认）、`SetLogLevel`（限时，§18.4） | 策略、风控 | `so-cli trader` / `kill` |
 | `Recording` | `GetRecordingStatus`（读取 `so-recorder` 在本机写出的状态文件） | 数据质量 | `so-cli data status` |
-| `Query` | `GetOrders(range)`、`GetFills(range)`、`GetAuditLog(range)`、`GetDailyReport(date)` | 订单成交、日志审计 | `so-cli` |
+| `Query` | `GetOrders(range)`、`GetFills(range)`、`GetAuditLog(range)`、`GetDailyReport(date)`、`GetLogs(filter)` / `StreamLogs(filter)`（运行日志，§18） | 订单成交、日志审计 | `so-cli logs` |
 | `Config` | `GetRiskLimits`、`GetStrategyConfig`（**只读**；修改走配置文件 + 部署） | 风控、策略 | `so-cli` |
 
 **两个数据域**：上表是 **VPS 交易域**的接口（实时、实盘相关），由 `so-trader` 提供。**本地研究域**（实验库、数据集、质量报告、验证报告）在本地研究机上，不经过 VPS，由 Rust 库 `so-lab` 以只读方式直接读取本地文件，`so-cli exp/data` 和将来的桌面端都链接这个库：
@@ -473,6 +473,7 @@ gRPC 服务（tonic），**只监听内网接口**，mTLS 或 Token 认证，所
 | `strategy` | `so-cli strategy promote mm-basic@0.3.1 --to paper --evidence <run_id>` | 生命周期迁移（检查门槛） |
 | `trader` | `so-cli trader status`、`start/stop <instance>`、`reduce-only`、`cancel-all` | 经 gRPC 控制 so-trader |
 | `watch` | `so-cli watch` | ratatui 终端实时界面：持仓、PnL、挂单、风控使用率、延迟、行情健康度 |
+| `logs` | `so-cli logs live-okx-funding --level warn --since 1h --follow` | 查看指定实例的运行日志（§18.6） |
 | `kill` | `so-cli kill --confirm` | Kill Switch：撤全部挂单、全部策略 Halt（可选平仓） |
 
 **Telegram**：只做告警推送 + 白名单用户的少量命令（`/status`、`/pnl`、`/halt`、`/reduceonly`）；`/halt` 需二次确认；不提供开仓类命令。
@@ -565,7 +566,7 @@ pub struct VenueCapabilities {         // 启动时加载，策略与执行算�
 | Raw Journal 滚动与同步 | VPS → 本地 | 每小时 |
 | 数据规范化 / 清洗 / 质量报告 | 本地 | 每日 |
 | 实盘 vs 回放回测一致性比对 | 本地 | 每日 |
-| 资金预算调整、子账户划转（如采用） | VPS | 每日，人工确认 |
+| 子账户资金划转 | VPS | 每日检查，人工确认 |
 
 ## 17. 实盘输入记录与重放
 
@@ -576,3 +577,72 @@ pub struct VenueCapabilities {         // 启动时加载，策略与执行算�
 - 用途：事故复盘、"为什么下了这一单"、验证修复是否正确（修复后重放应在问题点产生不同决策）。
 - 重放与实盘不一致本身就是 bug（非确定性来源），必须修复。
 - 全流程追踪链：行情 → 信号 → 决策 → 订单意图 → 风控结果 → 订单 → 成交 → 持仓 → 资金，每一环都带实例指纹与关联 ID（`event_seq`、`decision_id`、`coid`），可双向追溯。
+
+## 18. 日志与可观测性（so-telemetry）
+
+### 18.1 六类记录，各管各的
+
+| 类别 | 内容 | 格式与位置 | 能否丢失 | 保留 | 用途 |
+|---|---|---|---|---|---|
+| **运行日志** | 启动、连接/重连、序列缺口、限频、错误、警告 | JSON Lines，`data/<instance>/logs/`，按天滚动 | 可丢（丢弃计数） | 90 天 | 排障 |
+| **审计日志** | 订单、成交、控制命令、配置变更、生命周期迁移、风控动作 | SQLite（WAL） | **不可丢** | 永久 + 异地备份 | 追责、对账 |
+| **决策日志** | 每次决策（含"不交易"）：信号值、预期收益、成本、原因 | Parquet，按天 | 不可丢 | 实盘永久；模拟盘 1 年 | 策略分析 |
+| **输入日志** | 进入内核的全部事件（§17） | Raw Journal 格式 | 不可丢 | 实盘 ≥ 1 年 | 精确重放 |
+| **指标与延迟** | 计数器、延迟直方图、队列深度 | 本地 Parquet/SQLite 时序（02 §2.5） | 可降采样 | 1 年 | 性能监控 |
+| **告警** | 代码显式发出的告警事件 | Telegram + SQLite 记录 | 不可丢（发送失败重试） | 永久 | 通知人 |
+
+- **运行日志不是事实来源**：订单、成交、持仓以审计库和交易所为准，不从运行日志恢复状态，也不从运行日志统计交易数据。
+- **告警不靠扫描日志**：告警由代码显式发出（`Alert` 事件，带级别与去重键）；ERROR 日志本身不推送 Telegram，避免告警风暴。ERROR 速率作为指标监控，超阈值再告警。
+
+### 18.2 热路径怎么记日志
+
+```mermaid
+flowchart LR
+    K["内核线程"] -- "LogRecord（固定大小、Copy）<br/>SPSC，满则丢弃并计数" --> C["冷路径日志线程"]
+    K -- "AuditRecord<br/>SPSC，不允许丢弃" --> P["持久化线程 → SQLite"]
+    IO["I/O 线程（tokio）"] -- "直接调用 tracing 宏" --> T
+    C -- "代码 → 消息模板，转为 tracing 事件" --> T["tracing-subscriber<br/>JSON → 非阻塞文件写入"]
+```
+
+- 内核线程**不调用** `tracing::info!` 等宏（04 H9）。改为写入 `LogRecord { ts: UnixNanos, level: u8, code: LogCode, args: [i64; 4] }`：错误码是枚举，参数是整数（定点价格、ID），不含字符串，不分配内存。
+- 运行日志队列满时**丢弃**，并递增 `log_dropped_total` 指标，内核永不阻塞。
+- 审计队列**不允许丢弃**：容量按峰值订单速率的 100 倍配置；一旦写满，内核进入 ReduceOnly 并告警（没有审计记录就不能继续开仓）。
+- I/O 线程和冷路径线程可以直接使用 `tracing` 宏。
+
+### 18.3 格式与字段
+
+- **VPS 上一律 JSON Lines**，便于 `jq` 和程序过滤；本地 `so-cli` 输出人类可读的彩色文本。
+- 每条记录的固定字段：`ts`（UTC，纳秒，RFC 3339）、`level`、`instance`、`mode`、`venue`、`account`、`strategy`、`target`（模块路径）、`msg`；有关联时附带 `event_seq` / `decision_id` / `coid`，可以和审计库、决策日志对上。
+- 时间：一律 UTC 墙钟时间；回测中另加 `sim_ts`（模拟时间）。
+
+### 18.4 级别约定
+
+| 级别 | 用于 | 示例 |
+|---|---|---|
+| ERROR | 需要人工处理 | 对账不一致无法自动修复、订单进入 Unknown 超时、配置校验失败 |
+| WARN | 异常但已自动处理 | 断线重连、序列缺口后重建订单簿、接近限频、数据延迟 |
+| INFO | 状态变化 | 启动/停止、连接建立、生命周期迁移、参数热更新、每分钟摘要 |
+| DEBUG / TRACE | 开发调试 | 逐条消息、逐个决策细节 |
+
+- 实盘默认 `INFO`，**不按 tick 打 INFO 日志**；同一条 WARN 按键限流（如每 10 秒最多一次，附"已抑制 N 次"）。
+- 运行时调级：`Control.SetLogLevel(instance, filter, ttl)`，到期自动恢复；调级本身写审计日志。
+- 回测默认 `WARN`，避免 I/O 拖慢回测；日志输出不影响回测结果（确定性）；每次回测的日志存入该实验的目录。
+
+### 18.5 安全
+
+- 日志中绝不出现：API Key、Secret、Passphrase、签名、签名前的请求串、完整请求头（04 S2）。
+- 适配器的请求/响应日志只记录端点、状态码、耗时和业务字段。
+- 启动时打印的生效配置先脱敏再输出。
+- CI 测试：在故障注入测试的日志输出中搜索密钥模式，命中即失败。
+
+### 18.6 文件管理与查看
+
+- 按天滚动（`tracing-appender`）；超过 1 天的文件由定时任务（§16）压缩为 zstd，超过 90 天删除；日志目录设总量上限，磁盘可用空间低于阈值时告警。
+- systemd：stdout/stderr 只用于日志系统初始化之前的启动错误，由 journald 捕获。
+- 查看：`so-cli logs <instance> --level warn --since 1h [--grep 文本] [--follow]`，经 gRPC `Query.GetLogs` / `Query.StreamLogs`（将来的桌面端日志页面复用）；在 VPS 上也可直接 `jq` 查询文件。
+
+### 18.7 Python 侧
+
+- 研究代码用标准库 `logging`，自写 JSON 格式化器，字段名与 Rust 侧一致；不引入额外日志库。
+- `so-py` 中 Rust 的日志通过 `pyo3-log` 转给 Python `logging`（M3 验证可行性；不可行则写到独立文件）。
+- Notebook 中默认只显示 WARN 以上。

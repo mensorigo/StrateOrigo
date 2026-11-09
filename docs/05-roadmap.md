@@ -32,6 +32,7 @@ gantt
 - Python 包骨架（`uv` + maturin），`import strateorigo` 可调用 Rust 函数。
 - 一键检查脚本：fmt / clippy / nextest / deny / ruff / pyright / pytest。
 - `so-core`：`UnixNanos`、`Price`、`Qty`、ID、`Clock` + 性质测试。
+- `so-telemetry` 骨架：tracing JSON 输出 + 按天滚动 + 固定字段（03 §18.3）；所有程序从第一天起使用同一套日志初始化。
 - `so-cli` 骨架（clap 子命令结构）。
 
 **验收**
@@ -119,6 +120,7 @@ gantt
 - 策略实例生命周期（创建 / 启动 / 暂停 / 恢复 / 只减仓 / 退出 / 熔断）与状态恢复；`so-portfolio` 账户内目标仓位缩放、币数上限与 BTC Beta 敞口（03 §14）。
 - 实盘输入日志 + `so-cli replay`（03 §17）；定时任务调度（03 §16）。
 - 指标与延迟时序落本地文件；Telegram 告警 + 受限命令；每日策略日报。
+- 内核 `LogRecord` / `AuditRecord` 队列（03 §18.2）；`so-cli logs`、`Control.SetLogLevel`；日志压缩与清理定时任务。
 - 一致性比对工具：模拟盘结果 vs 同期录制数据回放回测。
 
 **验收**
@@ -127,6 +129,7 @@ gantt
 - [ ] 用输入日志重放任意一天的模拟盘，决策与订单序列 100% 一致。
 - [ ] 单个策略实例暂停 / 恢复 / 退出不影响其他实例。
 - [ ] 一个模拟盘进程同时运行 ≥ 5 个虚拟账户，各账户资金、持仓、盈亏互相独立，结果与逐个单独运行一致。
+- [ ] 日志压力测试：运行日志队列被打满时内核不阻塞、延迟不变，丢弃数被正确计数；故障注入测试的全部日志中搜索不到任何密钥。
 - [ ] `paper` 配置中出现 `key_file` 或进程尝试读取密钥目录时拒绝启动（测试覆盖）。
 - [ ] 内部 tick-to-trade p99 ≤ 50µs（VPS 实测）。
 

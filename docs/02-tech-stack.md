@@ -82,7 +82,9 @@
 ### 2.5 可观测性与工具
 | Crate | 版本基线 | 用途 |
 |---|---|---|
-| tracing / tracing-subscriber | 0.1.44 / 0.3.23 | 结构化日志（非阻塞 appender） |
+| tracing / tracing-subscriber | 0.1.44 / 0.3.23 | 结构化日志门面与订阅器（JSON 输出、`EnvFilter`、运行时调级 `reload`）；设计见 03 §18 |
+| tracing-appender | 0.2.5 | 非阻塞写入 + 按天滚动日志文件 |
+| pyo3-log | lock 时锁定（须兼容 pyo3 0.30） | `so-py` 中把 Rust 日志转给 Python `logging` |
 | metrics | 0.24.6 | 指标门面；自研 recorder 写本地 Parquet/SQLite 时序（**不用 Prometheus**） |
 | hdrhistogram | 7.6.0 | 延迟直方图 |
 | ratatui + crossterm | lock 时锁定 | `so-cli watch` 终端实时监控界面 |
