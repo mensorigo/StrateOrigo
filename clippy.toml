@@ -1,0 +1,2 @@
+# docs/04 F5：单个函数不超过 60 行。
+too-many-lines-threshold = 60

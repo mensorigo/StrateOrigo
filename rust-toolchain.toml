@@ -1,0 +1,6 @@
+# 版本固定方式：工作区 Cargo.toml 的 rust-version = "1.99.1" + scripts/check.ps1 校验 rustc 版本。
+# 这里写 stable 而不是 "1.99.1"，避免 rustup 另装一份同版本工具链；升级 Rust 时三处一起改（见 docs/02 §6）。
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy"]
+profile = "minimal"

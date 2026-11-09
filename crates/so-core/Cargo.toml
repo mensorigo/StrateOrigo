@@ -1,0 +1,18 @@
+[package]
+name = "so-core"
+description = "基础类型：UnixNanos、Price、Qty、ID、运行模式、Clock（热路径 crate）"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# 热路径 crate：新增依赖须写明理由（docs/02 §6.7）。
+[dependencies]
+thiserror.workspace = true # 仅编译期派生错误类型，无运行时开销
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,59 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/so-core",
+    "crates/so-telemetry",
+    "crates/so-py",
+    "apps/so-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.99.1"
+license = "UNLICENSED"
+publish = false
+
+# 版本基线见 docs/02-tech-stack.md；成员 crate 一律 `xxx.workspace = true`。
+[workspace.dependencies]
+# 内部
+so-core = { path = "crates/so-core" }
+so-telemetry = { path = "crates/so-telemetry" }
+
+# 错误
+thiserror = "2.0.21"
+anyhow = "1.0.104"
+
+# 日志（冷路径）
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", default-features = false, features = ["std", "fmt", "env-filter", "ansi", "registry"] }
+tracing-appender = "0.2.5"
+serde_json = { version = "1.0.154", features = ["preserve_order"] }
+chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
+
+# CLI 与二进制
+clap = { version = "4.6.7", features = ["derive"] }
+mimalloc = "0.1.52"
+
+# Python 绑定
+pyo3 = { version = "0.30.1", features = ["abi3-py312"] }
+
+# 测试
+proptest = "1.12.0"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_debug_implementations = "warn"
+
+[workspace.lints.clippy]
+dbg_macro = "deny"
+todo = "deny"
+print_stdout = "warn"
+print_stderr = "warn"
+too_many_lines = "warn" # 阈值见 clippy.toml（docs/04 F5）
+
+[profile.release]
+codegen-units = 1
+lto = "fat"
+panic = "abort"
+debug = "line-tables-only"
