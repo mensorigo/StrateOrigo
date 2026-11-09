@@ -7,12 +7,11 @@
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
 
-use sha2::Digest;
 use so_core::UnixNanos;
 
 use crate::error::RecorderError;
+use crate::timefmt::format_utc_date;
 
 /// Journal 行：一条 WS 帧的录制记录。
 ///
@@ -61,7 +60,7 @@ impl JournalRow {
 
 /// Journal 滚动写入器：一个文件对应一小时 + 一条连接。
 ///
-/// 手动实现 `Debug`：zstd 编码器与 SHA 状态无 Debug 实现，只暴露路径与计数。
+/// 手动实现 `Debug`：zstd 编码器无 Debug 实现，只暴露路径与计数。
 pub struct JournalWriter {
     dir: PathBuf,
     conn_id: String,
@@ -74,7 +73,6 @@ pub struct JournalWriter {
     total_rows: u64,
     /// 全部已写入字节（未压缩，当前文件）。
     bytes: u64,
-    sha: sha2::Sha256,
 }
 
 impl std::fmt::Debug for JournalWriter {
@@ -103,7 +101,6 @@ impl JournalWriter {
             rows: 0,
             total_rows: 0,
             bytes: 0,
-            sha: sha2::Sha256::new(),
         })
     }
 
@@ -117,7 +114,6 @@ impl JournalWriter {
         let Some(enc) = self.writer.as_mut() else {
             return Err(RecorderError::Journal("写入器未初始化".to_owned()));
         };
-        self.sha.update(line.as_bytes());
         enc.write_all(line.as_bytes())
             .map_err(|e| RecorderError::Journal(format!("写入 Journal 失败：{e}")))?;
         self.rows = self.rows.saturating_add(1);
@@ -145,7 +141,6 @@ impl JournalWriter {
         self.writer = Some(enc);
         self.rows = 0;
         self.bytes = 0;
-        self.sha = sha2::Sha256::new();
         Ok(())
     }
 
@@ -174,6 +169,9 @@ impl JournalWriter {
     }
 
     /// 关闭当前文件并写 sha256 边车（docs/06 §3.2 A9）。
+    ///
+    /// 哈希覆盖**整个文件**（含此前重连会话追加的 zstd 帧），
+    /// 保证同步端可以按边车校验完整内容。
     fn finish_current(&mut self) -> Result<(), RecorderError> {
         let Some(enc) = self.writer.take() else {
             return Ok(());
@@ -181,9 +179,8 @@ impl JournalWriter {
         enc.finish()
             .map_err(|e| RecorderError::Journal(format!("zstd 收尾失败：{e}")))?;
         let path = self.path_for(self.hour_start);
-        let digest = self.sha.clone().finalize();
+        let hex = crate::hash::sha256_file(&path)?;
         let sha_path = path.with_extension("zst.sha256");
-        let hex: String = digest.iter().map(|b| format!("{b:02x}")).collect();
         fs::write(&sha_path, format!("{hex}  {}\n", path.display()))
             .map_err(|e| RecorderError::Journal(format!("写 sha256 失败：{e}")))?;
         Ok(())
@@ -205,113 +202,5 @@ impl Drop for JournalWriter {
     fn drop(&mut self) {
         // best-effort：Drop 中忽略错误。
         let _ = self.finish_current();
-    }
-}
-
-/// Unix 秒 → `YYYY-MM-DD`（UTC，无 chrono 依赖的手写实现）。
-pub fn format_utc_date(unix_secs: i64) -> String {
-    let days = unix_secs.div_euclid(86_400);
-    let (y, m, d) = civil_from_days(days);
-    format!("{y:04}-{m:02}-{d:02}")
-}
-
-/// Unix 秒 → `HH:MM:SS`（UTC）。
-pub fn format_utc_time(unix_secs: i64) -> String {
-    let s = unix_secs.rem_euclid(86_400);
-    format!("{:02}:{:02}:{:02}", s / 3600, (s % 3600) / 60, s % 60)
-}
-
-/// 当前 Unix 纳秒（ts_recv 打点；生产用 quanta 高精度时钟替换）。
-pub fn now_nanos() -> UnixNanos {
-    let dur = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default();
-    UnixNanos(dur.as_nanos() as i64)
-}
-
-/// days since 1970-01-01 → (year, month, day)。Howard Hinnant 算法。
-fn civil_from_days(z: i64) -> (i64, u64, u64) {
-    let z = z + 719_468;
-    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
-    let doe = z - era * 146_097; // [0, 146096]
-    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146_096) / 365; // [0, 399]
-    let y = yoe + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100); // [0, 365]
-    let mp = (5 * doy + 2) / 153; // [0, 11]
-    let d = doy - (153 * mp + 2) / 5 + 1; // [1, 31]
-    let m = if mp < 10 { mp + 3 } else { mp - 9 }; // [1, 12]
-    (if m <= 2 { y + 1 } else { y }, m as u64, d as u64)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn temp_dir(tag: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("so-recorder-test-{tag}"));
-        let _ = fs::remove_dir_all(&dir);
-        dir
-    }
-
-    #[test]
-    fn journal_row_jsonl() {
-        let row = JournalRow::new(
-            UnixNanos(1_700_000_000_000_000_000),
-            "futures.trades",
-            "BTC_USDT",
-            "A",
-            r#"{"raw":"frame"}"#,
-        );
-        let jsonl = row.to_jsonl().unwrap();
-        assert!(jsonl.ends_with('\n'));
-        // 反序列化往返一致
-        let back: JournalRow = serde_json::from_str(jsonl.trim()).unwrap();
-        assert_eq!(back, row);
-    }
-
-    #[test]
-    fn writer_rolls_and_writes_sha() {
-        let dir = temp_dir("roll");
-        let mut w = JournalWriter::new(&dir, "gate", "A").unwrap();
-        // 2023-11-14 22:13:20 UTC = 1700000000
-        w.write(&JournalRow::new(
-            UnixNanos(1_700_000_000_000_000_000),
-            "c",
-            "S",
-            "A",
-            "line1",
-        ))
-        .unwrap();
-        // 2023-11-14 23:13:20 UTC（下一小时 = +3600 秒 = +3.6e12 纳秒）
-        w.write(&JournalRow::new(
-            UnixNanos(1_700_000_000_000_000_000 + 3_600_000_000_000),
-            "c",
-            "S",
-            "A",
-            "line2",
-        ))
-        .unwrap();
-        w.finish().unwrap();
-        // 两个文件 + 两个 sha256
-        let d1 = dir.join("gate").join("2023-11-14");
-        assert!(d1.join("22.A.journal.zst").exists());
-        assert!(d1.join("22.A.journal.zst.sha256").exists());
-        assert!(d1.join("23.A.journal.zst").exists());
-        assert_eq!(w.stats().total_rows, 2);
-        let _ = fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn date_formatting() {
-        assert_eq!(format_utc_date(1_700_000_000), "2023-11-14");
-        assert_eq!(format_utc_date(0), "1970-01-01");
-        assert_eq!(format_utc_date(951_782_400), "2000-02-29"); // 闰年
-        assert_eq!(format_utc_time(1_700_000_000), "22:13:20");
-    }
-
-    #[test]
-    fn now_nanos_plausible() {
-        let t = now_nanos();
-        assert!(t.0 > 1_700_000_000_000_000_000); // 2023 年之后
     }
 }

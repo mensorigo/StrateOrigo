@@ -42,6 +42,12 @@ pub struct Dedup {
     capacity: usize,
 }
 
+impl Default for Dedup {
+    fn default() -> Self {
+        Self::new(1_000_000)
+    }
+}
+
 impl Dedup {
     /// 容量按“最大重复间隔 × 消息速率”估算；默认 100 万条。
     pub fn new(capacity: usize) -> Self {

@@ -32,6 +32,9 @@ reqwest = { version = "0.13.1", default-features = false, features = ["json", "r
 # 时间戳（ts_recv 打点，docs/06 §3.2 A2）
 quanta = "0.13.0"
 
+# 日志（冷路径）
+tracing.workspace = true
+
 # 序列化（配置文件与 Journal 行）
 serde.workspace = true
 serde_json.workspace = true

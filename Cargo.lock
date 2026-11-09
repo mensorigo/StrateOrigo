@@ -1823,6 +1823,7 @@ dependencies = [
  "tokio",
  "tokio-tungstenite",
  "toml",
+ "tracing",
  "zstd",
 ]
 
