@@ -11,7 +11,7 @@ members = [
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.99.1"
-license = "UNLICENSED"
+license = "MIT OR Apache-2.0"
 publish = false
 
 # 版本基线见 docs/02-tech-stack.md；成员 crate 一律 `xxx.workspace = true`。

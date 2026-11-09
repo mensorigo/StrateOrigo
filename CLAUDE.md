@@ -16,6 +16,7 @@ StrateOrigo：Rust + Python 量化交易机器人。重心是**数据获取与�
 - 热路径 crate（so-core / so-book / so-engine / so-risk / so-oms / so-signal / so-exec / HF 策略）：不分配堆内存、不加锁、不阻塞、不用 tokio、价格数量用定点 `Price`/`Qty`、不 panic、时间只用 `Clock`。
 - 回测必须确定性；随机数只用显式种子的 RNG。
 - **文件划分**（docs/04 F1–F7）：单文件 ≤ 400 行（超 250 行警告）；每个文件只负责一件事，开头写明职责；解析、计算、显示、I/O、配置、错误分文件；`lib.rs`/`mod.rs`/`__init__.py` 不写逻辑；函数 ≤ 60 行；不准用 `utils`/`helpers`/`common` 这类文件名。
+- **错误处理**（docs/04 E1–E5）：每域一个 thiserror 枚举；跨边界带稳定英文错误码（`code()`），程序判别不匹配中文消息；gRPC/Python 映射只在 so-proto / so-py 边界做；热路径错误只返回或降级，不重试阻塞。
 - 运行模式 `backtest` / `paper` / `demo` / `live` 共用同一内核，内核中不得出现按模式分支。**一个账户一个策略**；`live`/`demo` 启动时校验"每个交易所 1 个账户、共 1 个策略"；`backtest`/`paper` 不得加载任何密钥（ADR-0001、docs/04 S8–S11）。
 - 数据层：原始数据不可变；清洗只加标记不删原始数据；真实插针不得删除；回测只引用数据集哈希。
 - 不得修改 `configs/env/live.toml`、`configs/risk/**`、密钥文件；不得连接实盘账户、部署 VPS、推送远程仓库（除非当次明确授权）。

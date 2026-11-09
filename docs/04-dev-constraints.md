@@ -52,6 +52,18 @@
 | F6 | **测试位置**：单元测试可以内联在 `#[cfg(test)] mod tests` 中，但计入行数；测试变多时移到同目录的 `tests.rs` 子模块，或 `tests/` 集成测试 |
 | F7 | **按职责拆，不按行数切**：不得出现 `part1` / `part2`、`utils2` 之类按长度机械切分的文件；`utils` / `helpers` / `common` 这类没有明确职责的文件名不允许使用 |
 
+### 错误处理约定
+
+Rust 的错误是值（`Result`），"统一"靠以下约定，而不是全局 try/catch：
+
+| # | 规则 |
+|---|---|
+| E1 | **每个域一个错误枚举**：库 crate 用 `thiserror` 定义本域错误（`so_core::FixedError`，将来的 `OmsError`、`RiskError`、适配器错误各归各的 crate）。禁止字符串当错误类型；`anyhow` 只在二进制内使用，不跨库边界传播 |
+| E2 | **跨边界错误带稳定错误码**：每个错误枚举实现 `code() -> &'static str`（大驼峰英文，如 `ExcessPrecision`）。`Display` 的中文消息只面向人；程序判别（Python 异常、gRPC status、测试匹配、审计）一律用错误码，不匹配中文消息 |
+| E3 | **映射只发生在边界**：so-proto 把域错误映射为 gRPC status（details 带错误码）；so-py 映射为具体 Python 异常类型。映射表在 so-proto / so-py 内各一个文件，新增错误时同步维护。库 crate 不感知任何边界协议 |
+| E4 | **错误分级**：可自动恢复的（重连、重建订单簿、限频退避）记 WARN；需要人工处理的（对账不一致、Unknown 超时、配置校验失败）才是 ERROR（见 03 §18.4） |
+| E5 | **热路径错误只能返回或降级**：返回 `Result`、拒绝订单、进入只减仓；不得重试阻塞（H3）、不得 panic（H6） |
+
 ### Python
 - `ruff check` + `ruff format` + `pyright`（strict 级别用于 `strateorigo/` 包，notebook 不要求）。
 - 研究代码（`research/`）可以随意写；进入 `python/strateorigo/` 的代码必须有测试。
