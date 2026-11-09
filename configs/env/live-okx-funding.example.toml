@@ -1,0 +1,26 @@
+# 实盘环境配置示例（复制为 configs/env/live-okx-funding.toml 后使用）。
+# ⚠ 真实文件由人工创建与修改（docs/04 §5.3：Agent 不得改动 configs/env/live*.toml）。
+# ADR-0001：live 模式强制"一个交易所一个账户 + 一个策略"；
+# 启动时校验不通过即拒绝启动（docs/04 S9）。
+
+mode = "live"
+venue = "okx"
+
+instance = "live-okx-funding"
+
+account = "okx-sub-funding"  # 只能有一个
+
+# 密钥文件路径（权限 600，内容不入仓库）。backtest/paper 模式拒绝此字段。
+key_file = "/etc/strateorigo/keys/okx-sub-funding.toml"
+
+strategy = "configs/strategies/funding-carry-v1.toml"  # 只能有一个
+
+[deploy]
+# systemd 模板单元 so-trader@live-okx-funding.service。
+# 实盘崩溃后不自动重启（docs/04 §8），由 so-guardian 撤单并告警，人工确认后重启。
+auto_restart = false
+
+[telemetry]
+log_dir = "/var/lib/strateorigo/live-okx-funding/logs"
+console = "off"
+default_filter = "info"

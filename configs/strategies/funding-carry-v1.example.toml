@@ -1,0 +1,33 @@
+# 策略实例配置示例：资金费套利 v1（docs/07 §6 的完整示例）。
+# 复制为 configs/strategies/funding-carry-v1.toml 后按验证结果填写参数。
+
+strategy = "st-funding-carry"
+version = "0.1.0"
+instance = "funding-carry-v1"
+
+[symbols]
+trade = ["BTC-USDT-SWAP"]              # 允许下单的品种
+watch = []                             # 只看不交易
+universe = ""                          # 选币型策略的币种池；与 trade 二选一
+max_symbols = 1
+direction = "both"                     # "both" | "long_only" | "short_only"
+
+[params]
+# 默认参数（相对单位，docs/07 §6 配置规则）。
+entry_threshold = 0.0002               # 资金费率年化 > 2% 开仓
+
+[params.override."BTC-USDT-SWAP"]
+entry_threshold = 0.00025
+
+[limits]                               # 策略级限额，不得超过 configs/risk/ 账户级限额
+max_position_notional = 2000.0
+max_order_notional = 200.0
+max_open_orders = 10
+max_daily_loss = 50.0
+max_drawdown = 100.0
+inventory_soft_limit = 0.5
+
+[kill]
+max_consecutive_losses = 20
+max_markout_1s_bps = -3.0
+stale_feed_ms = 500

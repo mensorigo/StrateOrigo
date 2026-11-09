@@ -1,0 +1,23 @@
+# 本地模拟盘环境配置示例（复制为 configs/env/paper-lab.toml 后使用）。
+# ADR-0001：paper 模式 = 多个虚拟账户，每个账户一个策略；不加载任何 API Key。
+# 原因见 docs/01 §7.1 / docs/04 S8：key_file 在 paper/backtest 模式下被拒绝。
+
+mode = "paper"
+venue = "okx"
+
+# 实例身份：日志、数据目录、systemd 单元（so-trader@paper-lab.service）都用这个名字。
+instance = "paper-lab"
+
+[recording]
+# 模拟盘运行期间同步录制行情（一致性验证用，docs/01 §7.3）。
+enabled = true
+
+[[accounts]]
+id = "sim-funding-v1"
+initial_balance = 10_000  # USDT
+strategy = "configs/strategies/funding-carry-v1.toml"
+
+[[accounts]]
+id = "sim-funding-v2"
+initial_balance = 10_000
+strategy = "configs/strategies/funding-carry-v2.toml"

@@ -1,7 +1,7 @@
 # StrateOrigo 开发文档
 
 > Rust + Python 量化交易机器人。
-> 文档版本：v0.2（2026-11-08） · 状态：设计阶段，尚无代码
+> 文档版本：v0.3（2026-11-09） · 状态：M0 工程基建进行中（workspace、so-core、so-telemetry、so-cli 骨架已落地）
 
 ## 一句话定位
 

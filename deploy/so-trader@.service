@@ -1,0 +1,28 @@
+# StrateOrigo systemd 模板单元。
+# 用法（docs/01 §11）：systemctl enable --now so-trader@live-okx-funding
+#   实例单元名规则（docs/04 §8）：live-*（实盘）、paper-*（模拟盘）、demo-*（交易所模拟）。
+# 真实文件由人工部署；Agent 不得修改已部署的实例配置（docs/04 §5.3）。
+
+[Unit]
+Description=StrateOrigo so-trader (%i)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=strateorigo
+Group=strateorigo
+# 密钥目录仅实盘实例可读；paper/demo 实例不挂载（docs/04 S8）。
+Environment=SO_INSTANCE=%i
+ExecStart=/usr/local/bin/so-trader --config /etc/strateorigo/env/%i.toml
+# 交易进程崩溃后不自动重启（docs/04 §8）：由 so-guardian 撤单并告警，人工确认后重启。
+Restart=no
+# 资源与安全
+LimitNOFILE=65536
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/strateorigo/%i
+# 实盘绑核与优先级（docs/01 §7.2）：CPUAffinity 按实例在 deploy/instances/ 中覆盖。
+
+[Install]
+WantedBy=multi-user.target
