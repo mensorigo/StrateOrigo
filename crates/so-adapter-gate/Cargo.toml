@@ -1,0 +1,25 @@
+[package]
+name = "so-adapter-gate"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# 适配器的**解析函数**属热路径（docs/04 §1）。M1 只做行情解析，
+# 不引入 tokio / 网络库（连接层在 so-recorder / so-trader 阶段接入）。
+[dependencies]
+so-core.workspace = true
+so-model.workspace = true
+thiserror.workspace = true
+
+# 解析层只用 serde 数据模型 + 手写定点转换，避免 serde_json::Value 的分配开销。
+# raw_value：信封的 result 字段保留原始 JSON，由具体频道延迟解析。
+serde.workspace = true
+serde_json = { workspace = true, features = ["raw_value"] }
+
+[dev-dependencies]
+insta = "1.49.0"
+
+[lints]
+workspace = true

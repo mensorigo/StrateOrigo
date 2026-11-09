@@ -1,0 +1,15 @@
+[package]
+name = "so-model"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# 热路径 crate（docs/04 §1）。依赖最小化（docs/02 §6.7）：只依赖 so-core。
+[dependencies]
+so-core.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

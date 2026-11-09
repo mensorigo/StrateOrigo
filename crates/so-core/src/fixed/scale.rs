@@ -10,6 +10,9 @@ pub const MAX_SCALE: u8 = 18;
 pub struct Scale(u8);
 
 impl Scale {
+    /// 精度 0（整数）。
+    pub const ZERO: Self = Self(0);
+
     /// 创建精度；超过 [`MAX_SCALE`] 返回错误。
     pub const fn new(decimals: u8) -> Result<Self, FixedError> {
         if decimals <= MAX_SCALE {
