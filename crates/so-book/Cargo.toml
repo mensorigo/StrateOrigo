@@ -1,0 +1,20 @@
+[package]
+name = "so-book"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# 热路径 crate（docs/04 §1）：不分配、不加锁、不阻塞、不 panic。
+# L1/L2 订单簿（docs/03 §5）：排序数组实现；环形价格网格方案待基准对比后决策。
+[dependencies]
+so-core.workspace = true
+so-model.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true

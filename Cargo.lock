@@ -828,6 +828,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "so-book"
+version = "0.1.0"
+dependencies = [
+ "proptest",
+ "so-core",
+ "so-model",
+ "thiserror",
+]
+
+[[package]]
 name = "so-cli"
 version = "0.1.0"
 dependencies = [

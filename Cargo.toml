@@ -5,6 +5,7 @@ members = [
     "crates/so-model",
     "crates/so-telemetry",
     "crates/so-adapter-gate",
+    "crates/so-book",
     "crates/so-py",
     "apps/so-cli",
 ]
