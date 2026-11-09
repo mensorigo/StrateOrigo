@@ -23,9 +23,11 @@
 pub mod error;
 pub mod msg;
 pub mod parse;
+pub mod rest;
 pub mod spot;
 pub mod types;
 
 pub use error::GateError;
 pub use parse::{parse_bbo, parse_funding, parse_obu, parse_ticker, parse_trade};
+pub use rest::{RawSnapshot, parse_contracts, parse_order_book_rest};
 pub use types::{ObuLevel, RawBbo, RawObu, RawTicker, RawTrade};
