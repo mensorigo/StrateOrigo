@@ -1,0 +1,17 @@
+# directories
+target/
+python/.venv/
+data/
+logs/
+*.egg-info/
+node_modules/
+
+# files
+Cargo.lock
+uv.lock
+*.log
+.env*
+*.jsonl
+
+# generated (do not edit)
+python/src/strateorigo/_core/

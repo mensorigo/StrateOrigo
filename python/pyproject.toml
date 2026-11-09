@@ -1,0 +1,60 @@
+[build-system]
+requires = ["maturin>=1.16,<2"]
+build-backend = "maturin"
+
+[project]
+name = "strateorigo"
+version = "0.1.0"
+description = "StrateOrigo Python 研究环境：数据、特征、回测封装、验证与实验库"
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=2.5,<3",
+    "polars>=2.1,<3",
+    "pyarrow>=26",
+    "scipy>=1.18",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.17",
+    "pyright>=1.1.414",
+    "pytest>=9",
+    "hypothesis>=6.170",
+    "maturin>=1.16,<2",
+]
+
+[tool.maturin]
+# Rust 扩展 crate（docs/03 §1：crates/so-py → Python 包 strateorigo._core）
+manifest-path = "../crates/so-py/Cargo.toml"
+python-source = "src"
+module-name = "strateorigo._core"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "W",      # pycodestyle / pyflakes
+    "I",                # import 顺序
+    "UP",               # pyupgrade
+    "B",                # bugbear
+    "PL",               # pylint 系列
+]
+ignore = [
+    "PLR0913",  # 函数参数数量：数据加载函数参数多属正常
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["PLR0915"]  # 性质测试可以较长
+
+[tool.pyright]
+include = ["src", "tests"]
+typeCheckingMode = "strict"
+pythonVersion = "3.12"
+venvPath = "."
+venv = ".venv"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

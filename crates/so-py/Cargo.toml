@@ -1,0 +1,19 @@
+[package]
+name = "so-py"
+description = "PyO3 绑定：暴露给 Python 包 strateorigo._core 的 Rust 扩展（docs/03 §1）"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+name = "strateorigo_core"
+crate-type = ["cdylib"]
+
+[dependencies]
+so-core.workspace = true
+pyo3.workspace = true
+
+[lints]
+workspace = true
