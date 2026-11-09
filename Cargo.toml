@@ -6,6 +6,7 @@ members = [
     "crates/so-telemetry",
     "crates/so-adapter-gate",
     "crates/so-book",
+    "crates/so-recorder",
     "crates/so-py",
     "apps/so-cli",
 ]
@@ -23,6 +24,8 @@ publish = false
 so-core = { path = "crates/so-core" }
 so-model = { path = "crates/so-model" }
 so-telemetry = { path = "crates/so-telemetry" }
+so-adapter-gate = { path = "crates/so-adapter-gate" }
+so-book = { path = "crates/so-book" }
 
 # 序列化（冷路径配置；适配器解析用 serde 模型）
 serde = { version = "1.0.229", default-features = false, features = ["derive", "alloc"] }

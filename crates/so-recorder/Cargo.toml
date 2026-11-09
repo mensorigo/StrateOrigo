@@ -1,0 +1,45 @@
+[package]
+name = "so-recorder"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# so-recorder：行情录制（docs/06 §3.1）。冷路径进程（非热路径 crate）：
+# 用 tokio + tokio-tungstenite 收帧，写入 Raw Journal 前先做序列校验
+# 与 A/B 流去重；解析复用 so-adapter-gate。
+[dependencies]
+so-core.workspace = true
+so-model.workspace = true
+so-adapter-gate.workspace = true
+so-book.workspace = true
+so-telemetry.workspace = true
+thiserror.workspace = true
+
+# 异步运行时与 WS（冷路径，允许 tokio）
+tokio = { version = "1.51.1", features = ["rt-multi-thread", "macros", "time", "sync", "net", "signal"] }
+tokio-tungstenite = { version = "0.28.0", features = ["rustls-tls-webpki-roots"] }
+futures-util = "0.3.32"
+
+# 压缩与哈希（Raw Journal 滚动：zstd + sha256，docs/06 §3.1 A9）
+zstd = "0.13.3"
+sha2 = "0.10.9"
+
+# HTTP（REST 快照，定时拉取，docs/06 §3.2 A6）
+reqwest = { version = "0.13.1", default-features = false, features = ["json", "rustls", "http2"] }
+
+# 时间戳（ts_recv 打点，docs/06 §3.2 A2）
+quanta = "0.13.0"
+
+# 序列化（配置文件与 Journal 行）
+serde.workspace = true
+serde_json.workspace = true
+toml = "1.1.1"
+
+[dev-dependencies]
+proptest.workspace = true
+tokio = { version = "1.51.1", features = ["test-util", "io-util"] }
+
+[lints]
+workspace = true

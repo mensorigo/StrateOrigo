@@ -19,6 +19,9 @@ allow = [
     "ISC",
     "Zlib",
     "Unicode-3.0",
+    # 只可能来自 WebPKI 根证书数据包（webpki-roots / webpki-root-certs，
+    # 代码本身是 Apache-2.0）。见 ADR-0012；新增任何代码许可证仍需单独 ADR。
+    "CDLA-Permissive-2.0",
 ]
 
 [bans]
