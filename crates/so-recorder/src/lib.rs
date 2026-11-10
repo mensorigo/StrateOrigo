@@ -12,6 +12,8 @@
 pub mod config;
 pub mod connection;
 pub mod dedup;
+pub mod download;
+pub mod download_run;
 pub mod error;
 pub mod frame;
 pub mod hash;
@@ -24,6 +26,8 @@ pub mod timefmt;
 pub mod ws;
 
 pub use config::RecordingConfig;
+pub use download::DownloadChannel;
+pub use download_run::download_history;
 pub use error::RecorderError;
 pub use journal::{JournalRow, JournalStats, JournalWriter};
 pub use run::run_recorder;

@@ -4,7 +4,7 @@ use std::process::ExitCode;
 
 use so_core::RunMode;
 
-use crate::args::Command;
+use crate::args::{Command, DataCommand};
 
 /// "尚未实现"的退出码，与参数错误（clap 用 2）区分。
 const EXIT_NOT_IMPLEMENTED: u8 = 3;
@@ -17,7 +17,22 @@ pub fn run(command: Command) -> ExitCode {
             return ExitCode::SUCCESS;
         }
         Command::Record { config, venue } => return crate::record::run(&config, venue.as_deref()),
-        Command::Data(_) => "M1 / M2",
+        Command::Data(DataCommand::Download {
+            venue,
+            symbol,
+            from,
+            to,
+            channel,
+        }) => {
+            return crate::data_download::run_download(
+                &venue,
+                &symbol,
+                &from,
+                to.as_deref(),
+                &channel,
+            );
+        }
+        Command::Data(_) => "M2",
         Command::Bt { .. } | Command::Exp(_) => "M3",
         Command::Strategy { .. } => "M4",
         Command::Trader(_) | Command::Watch { .. } | Command::Logs(_) => "M5",

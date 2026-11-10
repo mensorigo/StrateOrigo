@@ -1,6 +1,7 @@
 //! so-cli 入口：解析参数、初始化日志、分发命令。
 
 mod args;
+mod data_download;
 mod dispatch;
 mod record;
 

@@ -73,16 +73,19 @@ pub enum Command {
 /// `data` 子命令。
 #[derive(Debug, Subcommand)]
 pub enum DataCommand {
-    /// 下载交易所官方历史数据。
+    /// 下载交易所官方历史数据（docs/06 A10：断点续传 + 来源记录）。
     Download {
-        /// 交易所与市场，如 okx-swap。
+        /// 交易所与市场：gate-usdt（当前支持）。
         venue: String,
-        /// 品种，如 BTC-USDT-SWAP。
+        /// 品种，如 BTC_USDT。
         symbol: String,
         /// 开始日期 YYYY-MM-DD。
         #[arg(long)]
         from: String,
-        /// 频道，如 trades。
+        /// 结束日期 YYYY-MM-DD（含）；不填 = 到今天。
+        #[arg(long)]
+        to: Option<String>,
+        /// 频道：trades | candles | funding。
         #[arg(long)]
         channel: String,
     },
