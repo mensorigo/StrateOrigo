@@ -70,7 +70,12 @@ Invoke-Step '文件行数 ≤ 400 (docs/04 F1)' {
     if ($bad) { Write-Host "超过 $limit 行（CI 失败，docs/04 F1）：`n  $($bad -join "`n  ")" -ForegroundColor Red; exit 1 }
 }
 Invoke-Step 'cargo deny check' {
-    if (Get-Command cargo-deny -ErrorAction SilentlyContinue) { cargo deny check 2>$null }
+    if (Get-Command cargo-deny -ErrorAction SilentlyContinue) {
+        # 经 cmd 转发丢弃 stderr 警告（duplicate 等 warn 级不导致失败）：
+        # PS 5.1 下原生 stderr 重定向（2>$null）+ ErrorActionPreference=Stop
+        # 会把 warn 输出升级为异常，造成 exit 0 也报"失败"的误报。
+        cmd /c "cargo deny check 2>nul"
+    }
     else { Write-Host 'cargo-deny 未安装，跳过（安装：cargo install cargo-deny --locked）' }
 }
 
