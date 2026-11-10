@@ -129,12 +129,14 @@ fi
 
 # ---- 6. 基础工具 ----
 echo "[6/8] 基础工具链"
+# 检查单个命令 → 对应的安装包（gcc/make 都在 build-essential 里）
 for t in git curl pkg-config make gcc; do
     if have "$t"; then ok "$t"; else
         bad "缺 $t"
         case "$t" in
-            git|curl) apt_install "$t" ;;
-            *) apt_install build-essential pkg-config ;;
+            git)  apt_install git ;;
+            curl) apt_install curl ;;
+            *)    apt_install build-essential pkg-config ;;
         esac
     fi
 done
