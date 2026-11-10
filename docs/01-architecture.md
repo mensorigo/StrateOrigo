@@ -355,7 +355,7 @@ flowchart TB
 
 ## 11. 部署拓扑
 
-- **地域**：VPS 选在目标交易所撮合引擎所在云区域（业内普遍认为 OKX 在阿里云香港；Gate 的部署区域需自行测定）。**以实测 RTT 为准**：在香港、东京、新加坡候选区域各开一台 VPS，用 ping 和 WS 时间戳差测量 3 天后决定。OKX 与 Gate 若不在同一区域，跨所策略选两地 RTT 之和最小的位置。
+- **地域**：VPS 选在目标交易所撮合引擎所在云区域（业内普遍认为 OKX 在阿里云香港；Gate 的部署区域需自行测定）。**以实测 RTT 为准**：在香港、东京、新加坡候选区域各开一台 VPS，用 ping 和 WS 时间戳差测量 **1 天**后决定（2026-11-10 调整，原 3 天）。OKX 与 Gate 若不在同一区域，跨所策略选两地 RTT 之和最小的位置。
 - **一个交易所组一台 VPS**；跨所策略选两地 RTT 之和最小的位置。
 - **实例管理**：每个实例一份配置 `configs/env/<instance>.toml`，用 systemd 模板单元 `so-trader@<instance>.service` 启动；实盘实例与模拟盘实例的单元分开命名（如 `so-trader@live-okx-funding`、`so-trader@paper-lab`）。
 - **操作系统**：Ubuntu Server LTS；`systemd` 管理进程；时间同步 `chrony`。
