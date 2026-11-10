@@ -5,7 +5,10 @@
 
 param(
     [switch]$NoPython,
-    [switch]$SkipInstall
+    [switch]$SkipInstall,
+    # 自动安装缺失的工具（rustup 组件、cargo-nextest、cargo-deny、Python 检查器）。
+    # 只装 docs/02 §1 工具链清单内的项；不升级已有版本。
+    [switch]$Install
 )
 
 $ErrorActionPreference = 'Stop'
@@ -23,17 +26,84 @@ function Assert-Cmd {
 
 $failures = New-Object System.Collections.Generic.List[string]
 
+# 缺工具时的提示/自动安装。$Install 打开时真正执行安装；否则只打印命令。
+function Ensure-Tool {
+    param([string]$Name, [scriptblock]$InstallAction, [string]$InstallHint)
+    if (Get-Command $Name -ErrorAction SilentlyContinue) { return $true }
+    if ($Install) {
+        Write-Host "    安装 $Name ..." -ForegroundColor Yellow
+        try {
+            & $InstallAction
+            if ($LASTEXITCODE -ne 0) { throw "exit $LASTEXITCODE" }
+            if (Get-Command $Name -ErrorAction SilentlyContinue) {
+                Write-Host "    已安装 $Name" -ForegroundColor Green
+                return $true
+            }
+            # rustup 组件等装完不在当前 PATH 的情况：补探 PATH 后再试
+            $env:PATH = "$cargoBin;$env:PATH"
+            if (Get-Command $Name -ErrorAction SilentlyContinue) { return $true }
+            throw "安装后仍找不到 $Name"
+        }
+        catch {
+            Write-Host "    安装失败：$_" -ForegroundColor Red
+            Write-Host "    手动安装：$InstallHint" -ForegroundColor Yellow
+            return $false
+        }
+    }
+    else {
+        Write-Host "    缺 $Name（$InstallHint）" -ForegroundColor Yellow
+        Write-Host "    或运行 scripts/check.ps1 -Install 自动安装" -ForegroundColor Yellow
+        return $false
+    }
+}
+
 function Invoke-Step {
     param([string]$Name, [scriptblock]$Action)
     Write-Host "`n==> $Name" -ForegroundColor Cyan
     try {
         & $Action
-        if ($LASTEXITCODE -ne 0) { throw "exit $LASTEXITCODE" }
+        # 纯 cmdlet 步骤不产生 LASTEXITCODE（保持 null），不能视为失败
+        if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) { throw "exit $LASTEXITCODE" }
     }
     catch {
         Write-Host "    失败：$_" -ForegroundColor Red
         $failures.Add($Name) | Out-Null
     }
+}
+
+# ---- 工具链完备性检查（docs/02 §1；缺失项 -Install 自动安装）----
+
+Invoke-Step '工具链检查 (docs/02 §1)' {
+    $missing = 0
+    # Rust 核心：rustup / cargo / rustfmt / clippy（版本在后续步骤验证）
+    foreach ($t in @('rustup', 'cargo', 'rustfmt', 'cargo-clippy')) {
+        if (-not (Ensure-Tool $t {
+                if ($t -eq 'rustup') {
+                    throw "rustup 需手动安装（https://rustup.rs 或 winget install Rustlang.Rustup）"
+                }
+                rustup component add $(if ($t -eq 'rustfmt') { 'rustfmt' } else { 'clippy' })
+            } "rustup component add $($t -replace 'cargo-', '')") ) { $missing++ }
+    }
+    # cargo-nextest（nextest 缺失时 nextest 步骤会退回 cargo test，这里给统一入口）
+    Ensure-Tool 'cargo-nextest' { cargo install cargo-nextest --locked } `
+        'cargo install cargo-nextest --locked' | Out-Null
+    # cargo-deny（许可证/漏洞/重复依赖，docs/02 §6）
+    Ensure-Tool 'cargo-deny' { cargo install cargo-deny --locked } `
+        'cargo install cargo-deny --locked' | Out-Null
+    # Python 侧：uv（包管理，3.12 由 .python-version + uv 自动提供）
+    Ensure-Tool 'uv' {
+        throw "uv 需手动安装（powershell -c 'irm https://astral.sh/uv/install.ps1 | iex'）"
+    } "powershell -c 'irm https://astral.sh/uv/install.ps1 | iex'" | Out-Null
+    # maturin（PyO3 构建；uv 环境里 dev 组自带，这里查全局 PATH）
+    # protoc（M3 gRPC 阶段才需要；先探测提示不阻塞）
+    if (-not (Get-Command protoc -ErrorAction SilentlyContinue)) {
+        Write-Host "    提示：protoc 未装（M3 gRPC 才需要；届时可改用 protox 免装）" -ForegroundColor DarkGray
+    }
+    if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+        Write-Host "    缺 git（winget install Git.Git）" -ForegroundColor Yellow
+        $missing++
+    }
+    if ($missing -gt 0) { throw "$missing 个必需工具缺失" }
 }
 
 if (-not $SkipInstall) {
@@ -50,7 +120,9 @@ if (-not $SkipInstall) {
 Invoke-Step 'cargo fmt --check' { Assert-Cmd 'cargo' { cargo --version }; cargo fmt --all --check }
 Invoke-Step 'cargo clippy' { cargo clippy --workspace --all-targets -- -D warnings }
 Invoke-Step 'cargo nextest' {
-    if (Get-Command cargo-nextest -ErrorAction SilentlyContinue) { cargo nextest run }
+    $have = Ensure-Tool 'cargo-nextest' { cargo install cargo-nextest --locked } `
+        'cargo install cargo-nextest --locked'
+    if ($have) { cargo nextest run }
     else { Write-Host 'cargo-nextest 未安装，退回 cargo test'; cargo test --workspace }
 }
 Invoke-Step '文件行数 ≤ 400 (docs/04 F1)' {
@@ -70,22 +142,38 @@ Invoke-Step '文件行数 ≤ 400 (docs/04 F1)' {
     if ($bad) { Write-Host "超过 $limit 行（CI 失败，docs/04 F1）：`n  $($bad -join "`n  ")" -ForegroundColor Red; exit 1 }
 }
 Invoke-Step 'cargo deny check' {
-    if (Get-Command cargo-deny -ErrorAction SilentlyContinue) {
+    $have = Ensure-Tool 'cargo-deny' { cargo install cargo-deny --locked } `
+        'cargo install cargo-deny --locked'
+    if ($have) {
         # 经 cmd 转发丢弃 stderr 警告（duplicate 等 warn 级不导致失败）：
         # PS 5.1 下原生 stderr 重定向（2>$null）+ ErrorActionPreference=Stop
         # 会把 warn 输出升级为异常，造成 exit 0 也报"失败"的误报。
         cmd /c "cargo deny check 2>nul"
     }
-    else { Write-Host 'cargo-deny 未安装，跳过（安装：cargo install cargo-deny --locked）' }
+    else { $failures.Add('cargo deny check') | Out-Null; Write-Host 'cargo-deny 缺失，本轮跳过' }
 }
 
 if (-not $NoPython -and (Test-Path python/pyproject.toml)) {
-    Invoke-Step 'uv sync' { Assert-Cmd 'uv' { uv --version }; uv sync --project python }
-    Invoke-Step 'ruff' {
-        uv run --project python ruff check python
-        uv run --project python ruff format --check python
+    Invoke-Step 'uv 环境与 Python 3.12' {
+        $have = Ensure-Tool 'uv' {
+            throw "uv 需手动安装（powershell -c 'irm https://astral.sh/uv/install.ps1 | iex'）"
+        } "powershell -c 'irm https://astral.sh/uv/install.ps1 | iex'"
+        if (-not $have) { throw 'uv 缺失' }
+        uv sync --project python
     }
-    Invoke-Step 'pyright' { uv run --project python pyright }
+    Invoke-Step 'ruff' {
+        $have = Ensure-Tool 'ruff' { uv tool install ruff } 'uv tool install ruff'
+        if ($have) {
+            uv run --project python ruff check python
+            uv run --project python ruff format --check python
+        }
+        else { throw 'ruff 缺失' }
+    }
+    Invoke-Step 'pyright' {
+        $have = Ensure-Tool 'pyright' { uv tool install pyright } 'uv tool install pyright'
+        if ($have) { uv run --project python pyright }
+        else { throw 'pyright 缺失' }
+    }
     Invoke-Step 'pytest' { uv run --project python pytest python }
 }
 
