@@ -231,6 +231,54 @@ fn tickers_official_sample() {
     assert_eq!(t.rate_e8, -11_400); // -0.000114 × 10^8
 }
 
+#[test]
+fn tickers_mark_index_exceed_tick_precision() {
+    // 实测 2026-11-10：BTC order_price_round=0.1（1 位）但 mark 2 位；
+    // DOGE tick 5 位但 index 6 位（指数是多交易所均价，精度独立）。
+    // mark/index 按字段实际精度解析，tick scale 不足时抬升。
+    let sc1 = Scale::new(1).unwrap(); // BTC tick 0.1
+    let json = r#"[
+        {
+            "contract": "BTC_USDT",
+            "mark_price": "74889.98",
+            "index_price": "74917.45",
+            "funding_rate": "0.0001",
+            "t": 1794296899000
+        }
+    ]"#;
+    let t = so_adapter_gate::parse_ticker(json, RECV, sc1).unwrap();
+    assert_eq!(t.mark, Price(7_488_998)); // scale 2: 74889.98
+    assert_eq!(t.index, Some(Price(7_491_745)));
+
+    let sc5 = Scale::new(5).unwrap(); // DOGE tick 0.00001
+    let json = r#"[
+        {
+            "contract": "DOGE_USDT",
+            "mark_price": "0.07017",
+            "index_price": "0.070178",
+            "funding_rate": "0.0001",
+            "t": 1794296899000
+        }
+    ]"#;
+    let t = so_adapter_gate::parse_ticker(json, RECV, sc5).unwrap();
+    assert_eq!(t.mark, Price(7_017)); // scale 5 不变：0.07017
+    assert_eq!(t.index, Some(Price(70_178))); // scale 6: 0.070178
+
+    // 低精度字段语义不变（不抬也不降）
+    let json = r#"[
+        {
+            "contract": "BTC_USDT",
+            "mark_price": "74924",
+            "index_price": "74924",
+            "funding_rate": "0.0001",
+            "t": 1794296899000
+        }
+    ]"#;
+    let t = so_adapter_gate::parse_ticker(json, RECV, sc1).unwrap();
+    assert_eq!(t.mark, Price(749_240)); // scale 1
+    assert_eq!(t.index, Some(Price(749_240)));
+}
+
 // —— 错误路径 ——
 
 #[test]

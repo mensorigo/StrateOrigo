@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c ' *)",
+      "Bash(awk '-F\"' '{print $NF}')",
+      "Bash(awk -F. '{print length\\($2\\)}')",
+      "Bash(\"C:/Users/user/Desktop/StrateOrigo/target/release/examples/zread.exe\" \"C:/Users/user/AppData/Local/Temp/so-bench/raw/gate/2026-11-10/07.A.journal.zst\" futures.tickers 900)",
+      "Bash(awk -F. 'NF>1{print length\\($2\\)} NF==1{print 0}')",
+      "PowerShell(Set-Location C:\\\\Users\\\\user\\\\Desktop\\\\StrateOrigo; cargo build --release --examples -p so-recorder 2>&1 | Select-Object -Last 1; & .\\\\target\\\\release\\\\examples\\\\bench-parse.exe \"$env:TEMP\\\\so-bench\\\\raw\\\\gate\\\\2026-11-10\\\\07.A.journal.zst\" \"$env:TEMP\\\\so-bench\\\\raw\\\\gate\\\\2026-11-10\\\\07.B.journal.zst\" 2>&1 | Select-Object -Last 20)",
+      "Bash(rm -rf \"C:/Users/user/AppData/Local/Temp/so-bench\" \"C:/Users/user/AppData/Local/Temp/so-sync-test\" /tmp/journal_a.jsonl 2>/dev/null; echo cleaned)",
+      "PowerShell(Set-Location C:\\\\Users\\\\user\\\\Desktop\\\\StrateOrigo; cargo fmt; cargo clippy --all-targets -- -D warnings 2>&1 | Select-Object -Last 3; cargo nextest run 2>&1 | Select-Object -Last 3; $n = \\(Get-Content crates\\\\so-recorder\\\\examples\\\\bench-parse.rs | Measure-Object -Line\\).Lines; \"bench-parse.rs = $n lines\")"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\user\\AppData\\Local\\Temp\\so-bench"
+    ]
+  }
+}

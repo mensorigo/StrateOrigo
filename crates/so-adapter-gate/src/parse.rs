@@ -134,6 +134,11 @@ pub fn parse_trade(
 /// `futures.tickers`：`[{"contract","mark_price","index_price","funding_rate","t"}]` → 标记价 + 资金费。
 ///
 /// 返回首条（tickers 是全所 1s 轮询，每条推送通常只含订阅品种）。
+///
+/// mark/index 的精度可以**独立超过**品种 tick 精度（实测 2026-11-10：
+/// BTC `order_price_round=0.1` 但 mark 2 位；DOGE tick 5 位但 index 6 位——
+/// index 是多交易所均价，精度不受单所 tick 约束）。因此按字段实际
+/// 小数位抬升解析精度，而不是复用 tick scale；低精度值语义不变。
 pub fn parse_ticker(
     result_json: &str,
     ts_recv: UnixNanos,
@@ -143,19 +148,31 @@ pub fn parse_ticker(
         serde_json::from_str(result_json).map_err(|_| GateError::BadShape)?;
     let m = msgs.first().ok_or(GateError::BadShape)?;
     let ts_exch = ms_to_nanos(m.t)?;
+    let mark_scale = scale_for_decimal(&m.mark_price, scale);
     let index = if m.index_price.is_empty() {
         None
     } else {
-        Some(Price::parse(&m.index_price, scale)?)
+        let s = scale_for_decimal(&m.index_price, scale);
+        Some(Price::parse(&m.index_price, s)?)
     };
     let rate_raw = so_core::fixed::parse_decimal(&m.funding_rate, RATE_E8_SCALE)?;
     Ok(RawTicker {
         ts_recv,
         ts_exch,
-        mark: Price::parse(&m.mark_price, scale)?,
+        mark: Price::parse(&m.mark_price, mark_scale)?,
         index,
         rate_e8: rate_raw,
     })
+}
+
+/// tick scale 与十进制字符串实际小数位取 max（字段精度可超 tick，见
+/// [`parse_ticker`] 文档）。
+fn scale_for_decimal(s: &str, base: so_core::Scale) -> so_core::Scale {
+    let digits = s.rsplit_once('.').map_or(0, |(_, frac)| frac.len());
+    match u8::try_from(digits) {
+        Ok(d) if d > base.decimals() => so_core::Scale::new(d).unwrap_or(base),
+        _ => base,
+    }
 }
 
 /// 资金费率字符串 → rate_e8（暴露给 so-recorder 的 REST 解析复用）。
