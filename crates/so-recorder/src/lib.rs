@@ -19,6 +19,7 @@ pub mod journal;
 pub mod run;
 pub mod silence;
 pub mod snapshot;
+pub mod snapshot_pull;
 pub mod timefmt;
 pub mod ws;
 

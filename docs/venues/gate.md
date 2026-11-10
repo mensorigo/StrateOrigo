@@ -119,6 +119,11 @@ M1 优先接入。频道名前缀 `futures.`。
 5. 推送里 `b`/`a` 为空时也必须更新本地 `id` 与 `timestamp`；
 6. `size` 字段带 `X-Gate-Size-Decimal: 1` 时是字符串，不带是整数——适配器解析要兼容声明中的两种类型。
 
+**实测（2026-11-10 录制验证）**：
+
+- WS 握手与 REST 请求都必须带 `X-Gate-Size-Decimal: 1`，否则**所有** size 字段（OBU 档位 `s`、book_ticker `B`/`A`、trades `size`、REST 快照档位 `s`）都是整型张数且小数被服务端截断，无法恢复；
+- 不存在独立的 `futures.mark_price` 频道（官方频道表无此项）；标记价/指数价/资金费率随 `futures.tickers` 推送（§3.3）。
+
 ### 3.3 其他行情频道
 
 | 频道 | 速度 | 说明 |

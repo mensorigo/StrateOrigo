@@ -55,6 +55,15 @@ pub enum Command {
         /// 实例名；不填则显示全部实例（实盘与模拟盘用不同颜色区分）。
         instance: Option<String>,
     },
+    /// 启动行情录制（so-recorder 内核，docs/06 §3）。
+    Record {
+        /// 录制配置文件（configs/recording.toml）。
+        #[arg(short, long, default_value = "configs/recording.toml")]
+        config: String,
+        /// 只录制指定交易所（配置中的 venue ID）；不填则录制全部。
+        #[arg(long)]
+        venue: Option<String>,
+    },
     /// 查看实例运行日志。
     Logs(LogsArgs),
     /// Kill Switch：撤全部挂单并让策略进入 Halt。
@@ -203,5 +212,21 @@ mod tests {
     fn trader_control_requires_instance() {
         assert!(Cli::try_parse_from(["so-cli", "trader", "cancel-all"]).is_err());
         assert!(Cli::try_parse_from(["so-cli", "trader", "cancel-all", "paper-lab"]).is_ok());
+    }
+
+    #[test]
+    fn record_defaults_to_recording_toml() {
+        let cli = Cli::try_parse_from(["so-cli", "record"]).unwrap();
+        match cli.command {
+            Command::Record { config, venue } => {
+                assert_eq!(config, "configs/recording.toml");
+                assert!(venue.is_none());
+            }
+            _ => panic!("应为 Record 命令"),
+        }
+        assert!(
+            Cli::try_parse_from(["so-cli", "record", "-c", "other.toml", "--venue", "gate"])
+                .is_ok()
+        );
     }
 }

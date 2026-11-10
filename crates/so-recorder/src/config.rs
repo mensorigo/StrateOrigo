@@ -34,6 +34,9 @@ pub struct VenueConfig {
     pub ws_url: String,
     /// REST 基址（默认 `https://api.gateio.ws/api/v4`）。
     pub rest_url: String,
+    /// 结算币种路径段（Gate REST 用，默认 `usdt`）。
+    #[serde(default = "default_settle")]
+    pub settle: String,
     /// 品种列表（Gate 合约名，如 `BTC_USDT`）。
     pub symbols: Vec<String>,
     /// 是否启用双连接冗余（默认 true，docs/06 §3.2 A3）。
@@ -81,9 +84,14 @@ fn default_true() -> bool {
     true
 }
 
+fn default_settle() -> String {
+    "usdt".to_owned()
+}
+
 impl RecordingConfig {
-    /// 从 TOML 文本解析。
+    /// 从 TOML 文本解析（容忍 UTF-8 BOM——Windows 编辑器常带 BOM）。
     pub fn parse(text: &str) -> Result<Self, RecorderError> {
+        let text = text.strip_prefix('\u{feff}').unwrap_or(text);
         toml::from_str(text).map_err(|e| RecorderError::Config(e.to_string()))
     }
 }
@@ -137,6 +145,7 @@ symbols = ["BTC_USDT"]
 "#;
         let cfg = RecordingConfig::parse(text).unwrap();
         assert!(cfg.venues[0].dual_conn); // 默认双连接
+        assert_eq!(cfg.venues[0].settle, "usdt"); // 默认结算币种
         assert_eq!(cfg.data_dir, "data/raw");
         assert_eq!(cfg.roll_secs, 3600);
         assert_eq!(cfg.channels.len(), 0);
@@ -146,5 +155,13 @@ symbols = ["BTC_USDT"]
     fn rejects_bad_config() {
         let err = RecordingConfig::parse("not = [valid").unwrap_err();
         assert_eq!(err.code(), "RecorderConfig");
+    }
+
+    #[test]
+    fn tolerates_utf8_bom() {
+        // Windows 编辑器常写 BOM；配置文件必须可读（实测踩坑 2026-11-10）
+        let text = "\u{feff}\n[[venues]]\nvenue = \"gate\"\nws_url = \"wss://x\"\nrest_url = \"https://x\"\nsymbols = []\n";
+        let cfg = RecordingConfig::parse(text).unwrap();
+        assert_eq!(cfg.venues.len(), 1);
     }
 }

@@ -26,6 +26,7 @@ so-model = { path = "crates/so-model" }
 so-telemetry = { path = "crates/so-telemetry" }
 so-adapter-gate = { path = "crates/so-adapter-gate" }
 so-book = { path = "crates/so-book" }
+so-recorder = { path = "crates/so-recorder" }
 
 # 序列化（冷路径配置；适配器解析用 serde 模型）
 serde = { version = "1.0.229", default-features = false, features = ["derive", "alloc"] }
@@ -44,6 +45,7 @@ chrono = { version = "0.4.45", default-features = false, features = ["clock", "s
 # CLI 与二进制
 clap = { version = "4.6.7", features = ["derive"] }
 mimalloc = "0.1.52"
+tokio = { version = "1.51.1", features = ["rt-multi-thread", "macros", "time", "sync", "net", "signal"] }
 
 # Python 绑定
 pyo3 = { version = "0.30.1", features = ["abi3-py312"] }

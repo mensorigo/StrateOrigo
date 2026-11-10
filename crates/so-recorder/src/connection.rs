@@ -9,8 +9,12 @@ use std::time::Duration;
 
 use futures_util::{SinkExt, StreamExt};
 use tokio::net::TcpStream;
+use tokio::sync::watch;
 use tokio::time::interval;
 use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+use tokio_tungstenite::tungstenite::http::header::HeaderName;
+use tokio_tungstenite::tungstenite::http::header::HeaderValue;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
 use crate::config::{RecordingConfig, VenueConfig};
@@ -21,16 +25,36 @@ use crate::run::SharedState;
 use crate::timefmt::now_nanos;
 use crate::ws::{RequestFrame, ping_frame};
 
-/// 一次连接会话：连接 → 订阅 → 收帧循环（不返回 `Ok`，直到对端关闭）。
+/// 构造带 `X-Gate-Size-Decimal: 1` 的握手请求（docs/venues/gate.md §2.4）。
+///
+/// 不带该头时 size 是整型张数且小数被服务端截断，录制会永久丢失小数数量。
+fn size_decimal_request(
+    url: &str,
+) -> Result<tokio_tungstenite::tungstenite::http::Request<()>, RecorderError> {
+    let mut req = url
+        .into_client_request()
+        .map_err(|e| RecorderError::Ws(format!("WS 请求构造失败：{e}")))?;
+    req.headers_mut().insert(
+        HeaderName::from_static("x-gate-size-decimal"),
+        HeaderValue::from_static("1"),
+    );
+    Ok(req)
+}
+
+/// 一次连接会话：连接 → 订阅 → 收帧循环。
+///
+/// 关闭信号到达时正常返回 `Ok(())`（Journal 在 Drop 中收尾并写边车）。
 pub(crate) async fn run_connection_once(
     config: &RecordingConfig,
     venue: &VenueConfig,
     data_dir: &Path,
     conn_id: &str,
     shared: &Arc<Mutex<SharedState>>,
+    mut shutdown: watch::Receiver<bool>,
 ) -> Result<(), RecorderError> {
     let mut journal = JournalWriter::new(data_dir, &venue.venue, conn_id)?;
-    let (ws, _resp) = tokio_tungstenite::connect_async(&venue.ws_url)
+    let request = size_decimal_request(&venue.ws_url)?;
+    let (ws, _resp) = tokio_tungstenite::connect_async(request)
         .await
         .map_err(|e| RecorderError::Ws(format!("连接失败：{e}")))?;
     let mut ws: WebSocketStream<MaybeTlsStream<TcpStream>> = ws;
@@ -59,6 +83,7 @@ pub(crate) async fn run_connection_once(
 
     loop {
         tokio::select! {
+            _ = shutdown.changed() => return Ok(()),
             _ = silence_tick.tick() => {
                 handle_silence_tick(shared)?;
             }

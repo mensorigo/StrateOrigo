@@ -7,6 +7,8 @@
 
 use serde::Deserialize;
 
+use crate::flex::string_or_number;
+
 /// WS 信封：订阅确认与数据推送同构，用 `event` 区分（docs/venues/gate.md §2.1）。
 #[derive(Debug, Deserialize)]
 pub struct Envelope<'a> {
@@ -39,13 +41,13 @@ pub struct BookTickerMsg {
     pub s: String,
     /// 最优买价；空字符串 = 无买单。
     pub b: String,
-    /// 最优买量（字符串形式，带 Size-Decimal 头）。
-    #[serde(rename = "B")]
+    /// 最优买量（带 Size-Decimal 头是字符串，否则是整数张数）。
+    #[serde(rename = "B", deserialize_with = "string_or_number")]
     pub bid_qty: String,
     /// 最优卖价。
     pub a: String,
     /// 最优卖量。
-    #[serde(rename = "A")]
+    #[serde(rename = "A", deserialize_with = "string_or_number")]
     pub ask_qty: String,
 }
 
@@ -78,7 +80,8 @@ pub struct ObuMsg {
 pub struct ObuLevelMsg {
     /// 价格。
     pub p: String,
-    /// 最新总量（覆盖量）；0 = 删档。
+    /// 最新总量（覆盖量）；0 = 删档。可能是整数（不带头时）。
+    #[serde(deserialize_with = "string_or_number")]
     pub s: String,
 }
 
@@ -91,7 +94,8 @@ pub struct TradeMsg {
     pub create_time_ms: i64,
     /// 成交价。
     pub price: String,
-    /// 成交量；正 = 主动买，负 = 主动卖。
+    /// 成交量；正 = 主动买，负 = 主动卖。可能是整数（不带头时）。
+    #[serde(deserialize_with = "string_or_number")]
     pub size: String,
     /// 合约名。
     #[serde(rename = "contract")]

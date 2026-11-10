@@ -13,8 +13,10 @@ path = "src/main.rs"
 
 [dependencies]
 so-core.workspace = true
+so-recorder.workspace = true
 so-telemetry.workspace = true
 clap.workspace = true
+tokio.workspace = true
 tracing.workspace = true
 mimalloc.workspace = true
 

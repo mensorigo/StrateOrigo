@@ -1,0 +1,48 @@
+# 行情录制配置（so-cli record，docs/06 §3.3）。
+# 品种按 24h 成交额前列；变更品种列表要有记录（docs/06 §3.3）。
+
+data_dir = "data/raw"
+roll_secs = 3600          # 小时滚动
+snapshot_secs = 300       # 深度快照间隔（docs/06 §3.2 A6）
+
+[[venues]]
+venue = "gate"
+ws_url = "wss://fx-ws.gateio.ws/v4/ws/usdt"
+rest_url = "https://api.gateio.ws/api/v4"
+settle = "usdt"
+symbols = [
+    "BTC_USDT",
+    "ETH_USDT",
+    "SOL_USDT",
+    "XRP_USDT",
+    "DOGE_USDT",
+    "BCH_USDT",
+    "LTC_USDT",
+    "LINK_USDT",
+    "AVAX_USDT",
+    "SUI_USDT",
+]
+dual_conn = true          # A/B 双连接冗余（docs/06 §3.2 A3）
+
+[[channels]]
+channel = "futures.order_book_update"
+params = ["100ms", "100"]  # 合约名由订阅器自动前置
+max_silence_secs = 10      # 深度频道消息密集，静默阈值收紧
+maintain_book = true
+
+[[channels]]
+channel = "futures.trades"
+params = []
+max_silence_secs = 60      # 低活跃品种成交稀疏，阈值放宽
+
+[[channels]]
+channel = "futures.book_ticker"
+params = []
+max_silence_secs = 10
+
+[[channels]]
+channel = "futures.tickers"
+params = ["100ms"]
+max_silence_secs = 15
+# 标记价/指数价/资金费随 futures.tickers 推送（docs/venues/gate.md §3.3）；
+# 不存在独立的 mark_price 频道。

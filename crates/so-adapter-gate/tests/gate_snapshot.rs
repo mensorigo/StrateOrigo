@@ -96,6 +96,59 @@ fn obu_full_replace_and_empty_sides() {
     assert_eq!(obu.last_id, 110);
 }
 
+#[test]
+fn obu_integer_size_accepted() {
+    // 不带 X-Gate-Size-Decimal 头时 s 是整型张数（2026-11-10 实测录制样本）
+    let json = r#"{
+        "t": 1794272504605, "s": "BTC_USDT",
+        "U": 130949312629, "u": 130949312695,
+        "a": [ {"p": "75202", "s": 4152} ],
+        "b": [ {"p": "75201.6", "s": 709} ],
+        "l": "100"
+    }"#;
+    let obu = parse_obu(json, RECV, sc()).unwrap();
+    let lv = obu.levels.as_slice();
+    assert_eq!(lv.len(), 2);
+    // parse_obu 先 b 后 a（与官方样例测试一致）
+    assert_eq!(lv[0].side, Side::Bid);
+    assert_eq!(lv[0].price, Price(752_016));
+    assert_eq!(lv[0].qty, Qty(7_090)); // 709 × 10
+    assert_eq!(lv[1].side, Side::Ask);
+    assert_eq!(lv[1].price, Price(752_020));
+    assert_eq!(lv[1].qty, Qty(41_520)); // 4152 × 10
+}
+
+#[test]
+fn bbo_and_trade_integer_size_accepted() {
+    // book_ticker 的 B/A 与 trades 的 size 同样有整型形态（实测样本）
+    // SOL_USDT 价格两位小数，用 scale 2
+    let sc2 = Scale::new(2).unwrap();
+    let bbo = parse_bbo(
+        r#"{"t":1794272504650,"u":44408682894,"s":"SOL_USDT","b":"86.69","B":100,"a":"86.7","A":321}"#,
+        RECV,
+        sc2,
+    )
+    .unwrap();
+    assert_eq!(bbo.bid_qty, Some(Qty(10_000))); // 100 × 100
+    assert_eq!(bbo.ask_qty, Some(Qty(32_100))); // 321 × 100
+
+    // ETH_USDT 价格 2130.8 一位小数，用 scale 1
+    let json = r#"[{"id":968914222,"size":0,"create_time":1794272504,"create_time_ms":1794272504707,"price":"2130.8","contract":"ETH_USDT"}]"#;
+    let mut out = [so_adapter_gate::RawTrade {
+        ts_recv: UnixNanos(0),
+        ts_exch: UnixNanos(0),
+        trade_id: 0,
+        price: Price::ZERO,
+        qty: Qty::ZERO,
+        aggressor: Side::Bid,
+        internal: false,
+    }; 4];
+    let n = parse_trade(json, RECV, sc(), &mut out).unwrap();
+    assert_eq!(n, 1);
+    assert_eq!(out[0].trade_id, 968_914_222);
+    assert_eq!(out[0].qty, Qty(0));
+}
+
 // —— futures.trades（官方样例；size 正 = 主动买）——
 
 #[test]

@@ -2,6 +2,7 @@
 
 mod args;
 mod dispatch;
+mod record;
 
 use std::process::ExitCode;
 

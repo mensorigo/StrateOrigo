@@ -21,6 +21,7 @@
 )]
 
 pub mod error;
+pub mod flex;
 pub mod msg;
 pub mod parse;
 pub mod rest;

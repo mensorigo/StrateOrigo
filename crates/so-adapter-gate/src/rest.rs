@@ -56,12 +56,13 @@ pub struct OrderBookRestMsg {
     pub bids: Vec<RestLevelMsg>,
 }
 
-/// REST 深度档位（与 WS 对象格式相同 `{p, s}`，但字符串）。
+/// REST 深度档位（`{p, s}`；带 Size-Decimal 头时 s 是字符串，否则是整数张数）。
 #[derive(Debug, serde::Deserialize)]
 pub struct RestLevelMsg {
     /// 价格。
     pub p: String,
     /// 总量。
+    #[serde(deserialize_with = "crate::flex::string_or_number")]
     pub s: String,
 }
 
@@ -199,5 +200,22 @@ mod tests {
         assert_eq!(snap.asks.as_slice()[0].price, Price(152));
         assert_eq!(snap.asks.as_slice()[1].price, Price(153));
         assert_eq!(snap.asks.as_slice()[0].qty, Qty(10_000));
+    }
+
+    #[test]
+    fn order_book_rest_integer_size_accepted() {
+        // 不带 X-Gate-Size-Decimal 头时 s 是整型张数（2026-11-10 实测录制样本）
+        let sc2 = Scale::new(2).unwrap();
+        let json = r#"{
+            "id": 14206010871,
+            "current": 1794274915.008,
+            "update": 1794274914.767,
+            "asks": [{"s": 422, "p": "51.43"}],
+            "bids": [{"s": 100, "p": "51.42"}]
+        }"#;
+        let snap = parse_order_book_rest(json, RECV, sc2).unwrap();
+        assert_eq!(snap.snapshot_id, 14206010871);
+        assert_eq!(snap.asks.as_slice()[0].qty, Qty(42_200)); // 422 × 100
+        assert_eq!(snap.bids.as_slice()[0].qty, Qty(10_000));
     }
 }

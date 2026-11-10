@@ -16,6 +16,7 @@ pub fn run(command: Command) -> ExitCode {
             print_info();
             return ExitCode::SUCCESS;
         }
+        Command::Record { config, venue } => return crate::record::run(&config, venue.as_deref()),
         Command::Data(_) => "M1 / M2",
         Command::Bt { .. } | Command::Exp(_) => "M3",
         Command::Strategy { .. } => "M4",
