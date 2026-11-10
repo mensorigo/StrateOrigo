@@ -26,6 +26,10 @@ pub enum RecorderError {
         code: &'static str,
     },
 
+    /// Telegram 告警发送失败（重试耗尽后丢弃，ADR-0013）。
+    #[error("告警发送失败：{0}")]
+    Alert(String),
+
     /// IO 错误。
     #[error("IO 错误：{0}")]
     Io(#[from] std::io::Error),
@@ -40,6 +44,7 @@ impl RecorderError {
             Self::Rest(_) => "RecorderRest",
             Self::Journal(_) => "RecorderJournal",
             Self::Parse { .. } => "RecorderParse",
+            Self::Alert(_) => "RecorderAlert",
             Self::Io(_) => "RecorderIo",
         }
     }

@@ -61,8 +61,7 @@ pub struct ChannelConfig {
 /// Telegram 告警配置。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AlertConfig {
-    /// Bot token（从环境变量读取，不落配置文件——docs/04 S8）。
-    #[serde(skip)]
+    /// 存放 Bot token 的**环境变量名**（token 本身不落配置文件——docs/04 S8）。
     pub bot_token_env: String,
     /// Chat ID。
     pub chat_id: String,

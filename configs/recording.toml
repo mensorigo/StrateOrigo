@@ -46,3 +46,10 @@ params = ["100ms"]
 max_silence_secs = 15
 # 标记价/指数价/资金费随 futures.tickers 推送（docs/venues/gate.md §3.3）；
 # 不存在独立的 mark_price 频道。
+
+# Telegram 告警（可选；不配置则仅日志告警，ADR-0013）。
+# token 从环境变量读取（密钥不落配置文件，docs/04 S8）：
+#   $env:GATE_ALERT_BOT_TOKEN = "123456:ABC..."
+# [alert]
+# bot_token_env = "GATE_ALERT_BOT_TOKEN"
+# chat_id = "-1001234567890"

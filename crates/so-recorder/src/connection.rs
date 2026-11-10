@@ -17,6 +17,7 @@ use tokio_tungstenite::tungstenite::http::header::HeaderName;
 use tokio_tungstenite::tungstenite::http::header::HeaderValue;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
+use crate::alert::AlertHandle;
 use crate::config::{RecordingConfig, VenueConfig};
 use crate::error::RecorderError;
 use crate::frame::{handle_frame, handle_silence_tick};
@@ -50,6 +51,7 @@ pub(crate) async fn run_connection_once(
     data_dir: &Path,
     conn_id: &str,
     shared: &Arc<Mutex<SharedState>>,
+    alert: &AlertHandle,
     mut shutdown: watch::Receiver<bool>,
 ) -> Result<(), RecorderError> {
     let mut journal = JournalWriter::new(data_dir, &venue.venue, conn_id)?;
@@ -85,7 +87,7 @@ pub(crate) async fn run_connection_once(
         tokio::select! {
             _ = shutdown.changed() => return Ok(()),
             _ = silence_tick.tick() => {
-                handle_silence_tick(shared)?;
+                handle_silence_tick(shared, alert)?;
             }
             _ = ping_tick.tick() => {
                 let t = now_nanos().0 / 1_000_000_000;
@@ -103,7 +105,7 @@ pub(crate) async fn run_connection_once(
                 };
                 // ts_recv 第一时间打点（docs/06 §3.2 A2）。
                 let ts_recv = now_nanos();
-                handle_frame(&mut journal, shared, conn_id, &text, ts_recv)?;
+                handle_frame(&mut journal, shared, alert, conn_id, &text, ts_recv)?;
             }
         }
     }

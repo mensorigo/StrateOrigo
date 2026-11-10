@@ -11,6 +11,7 @@ use std::time::Duration;
 use tokio::sync::watch;
 use tokio::time::{Instant, sleep_until};
 
+use crate::alert::{AlertHandle, start_alert_task};
 use crate::config::{RecordingConfig, VenueConfig};
 use crate::connection::run_connection_once;
 use crate::dedup::Dedup;
@@ -58,19 +59,28 @@ pub async fn run_recorder(
     // 关闭信号：Ctrl-C 后各任务收尾（Journal 落盘 + 边车哈希）再退出。
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
 
+    // Telegram 告警后台任务（ADR-0013）：未配置时返回禁用句柄，仅日志告警。
+    let alert = match &config.alert {
+        Some(alert_cfg) => {
+            let a = start_alert_task(alert_cfg, shutdown_rx.clone());
+            if a.is_enabled() {
+                tracing::info!("Telegram 告警已启用");
+            }
+            a
+        }
+        None => AlertHandle::disabled(),
+    };
+
     let mut handles = Vec::new();
-    let conn_ids: &[&str] = if venue.dual_conn { &["A", "B"] } else { &["A"] };
-    for conn_id in conn_ids.iter().copied() {
-        let cfg = config.clone();
-        let venue_cfg = venue.clone();
-        let shared = Arc::clone(&shared);
-        let data_dir = data_dir.to_owned();
-        let conn = String::from(conn_id);
-        let rx = shutdown_rx.clone();
-        handles.push(tokio::spawn(async move {
-            run_connection(&cfg, &venue_cfg, &data_dir, &conn, shared, rx).await
-        }));
-    }
+    spawn_connections(
+        config,
+        venue,
+        data_dir,
+        &shared,
+        &alert,
+        &shutdown_rx,
+        &mut handles,
+    );
 
     // REST 快照任务（A6）：独立于 WS 连接，单进程一条。
     {
@@ -94,6 +104,32 @@ pub async fn run_recorder(
     Ok(())
 }
 
+/// 为 A/B（或单 A）各 spawn 一个 `run_connection` 任务。
+#[allow(clippy::too_many_arguments)] // spawn 装配参数，拆分会引入纯转发结构体
+fn spawn_connections(
+    config: &RecordingConfig,
+    venue: &VenueConfig,
+    data_dir: &Path,
+    shared: &Arc<Mutex<SharedState>>,
+    alert: &AlertHandle,
+    shutdown: &watch::Receiver<bool>,
+    handles: &mut Vec<tokio::task::JoinHandle<Result<(), RecorderError>>>,
+) {
+    let conn_ids: &[&str] = if venue.dual_conn { &["A", "B"] } else { &["A"] };
+    for conn_id in conn_ids.iter().copied() {
+        let cfg = config.clone();
+        let venue_cfg = venue.clone();
+        let shared = Arc::clone(shared);
+        let data_dir = data_dir.to_owned();
+        let conn = String::from(conn_id);
+        let alert = alert.clone();
+        let rx = shutdown.clone();
+        handles.push(tokio::spawn(async move {
+            run_connection(&cfg, &venue_cfg, &data_dir, &conn, shared, alert, rx).await
+        }));
+    }
+}
+
 /// 一条连接的完整生命周期（含无限重连）。
 pub async fn run_connection(
     config: &RecordingConfig,
@@ -101,6 +137,7 @@ pub async fn run_connection(
     data_dir: &Path,
     conn_id: &str,
     shared: Arc<Mutex<SharedState>>,
+    alert: AlertHandle,
     mut shutdown: watch::Receiver<bool>,
 ) -> Result<(), RecorderError> {
     let mut attempt: u32 = 0;
@@ -115,6 +152,7 @@ pub async fn run_connection(
                 data_dir,
                 conn_id,
                 &shared,
+                &alert,
                 session_shutdown,
             ) => r,
         };

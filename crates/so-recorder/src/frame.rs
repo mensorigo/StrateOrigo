@@ -7,6 +7,7 @@ use std::sync::{Arc, Mutex};
 
 use so_core::UnixNanos;
 
+use crate::alert::{AlertHandle, silence_alert_text};
 use crate::dedup::dedup_key_from_frame;
 use crate::error::RecorderError;
 use crate::journal::{JournalRow, JournalWriter};
@@ -19,6 +20,7 @@ use crate::ws::{EnvelopeFrame, FrameKind, is_pong, is_upgrade_notice};
 pub(crate) fn handle_frame(
     journal: &mut JournalWriter,
     shared: &Arc<Mutex<SharedState>>,
+    alert: &AlertHandle,
     conn_id: &str,
     text: &str,
     ts_recv: UnixNanos,
@@ -53,7 +55,7 @@ pub(crate) fn handle_frame(
             if st.dedup.first_seen(&key) {
                 // 首见：刷新静默计时（重复帧不刷新——另一条连接活着不代表本连接活着）。
                 let events = st.silence.on_message(&env.channel, &symbol, ts_recv.0);
-                log_silence_events(&events);
+                log_silence_events(&events, alert);
             }
             Ok(())
         }
@@ -65,19 +67,22 @@ pub(crate) fn handle_frame(
     }
 }
 
-/// 静默 tick：检测 + 告警日志（Telegram 告警接入点在 M1 后续）。
-pub(crate) fn handle_silence_tick(shared: &Arc<Mutex<SharedState>>) -> Result<(), RecorderError> {
+/// 静默 tick：检测 + 日志 + Telegram 告警。
+pub(crate) fn handle_silence_tick(
+    shared: &Arc<Mutex<SharedState>>,
+    alert: &AlertHandle,
+) -> Result<(), RecorderError> {
     let now = now_nanos().0;
     let mut st = shared
         .lock()
         .map_err(|_| RecorderError::Ws("共享状态锁中毒".into()))?;
     let events = st.silence.check(now);
-    log_silence_events(&events);
+    log_silence_events(&events, alert);
     Ok(())
 }
 
-/// 静默事件 → 日志。
-pub(crate) fn log_silence_events(events: &[SilenceEvent]) {
+/// 静默事件 → 日志 + Telegram 告警（告警由后台任务发送，这里只入队）。
+pub(crate) fn log_silence_events(events: &[SilenceEvent], alert: &AlertHandle) {
     for ev in events {
         match ev {
             SilenceEvent::WentSilent(k) => {
@@ -87,6 +92,7 @@ pub(crate) fn log_silence_events(events: &[SilenceEvent]) {
                 tracing::info!(channel = %k.channel, symbol = %k.symbol, "断流恢复");
             }
         }
+        alert.send(&silence_alert_text(ev));
     }
 }
 
@@ -122,6 +128,11 @@ mod tests {
         dir
     }
 
+    /// 禁用告警句柄（测试不需要 Telegram）。
+    fn no_alert() -> AlertHandle {
+        AlertHandle::disabled()
+    }
+
     #[test]
     fn update_frame_journaled_and_deduped() {
         let dir = temp_dir("frame");
@@ -129,11 +140,11 @@ mod tests {
         let shared = Arc::new(Mutex::new(SharedState::default()));
         let frame = r#"{"time":1,"channel":"futures.trades","event":"update","error":null,"result":[{"id":27753479,"contract":"BTC_USDT"}]}"#;
         let ts = UnixNanos(1_700_000_000_000_000_000);
-        handle_frame(&mut journal, &shared, "A", frame, ts).unwrap();
+        handle_frame(&mut journal, &shared, &no_alert(), "A", frame, ts).unwrap();
         assert_eq!(journal.stats().total_rows, 1);
         // 同帧再处理：Journal 记录（原始帧不可变，两连接都落盘），
         // 但去重器只记一次。
-        handle_frame(&mut journal, &shared, "A", frame, ts).unwrap();
+        handle_frame(&mut journal, &shared, &no_alert(), "A", frame, ts).unwrap();
         assert_eq!(journal.stats().total_rows, 2);
         {
             let st = shared.lock().unwrap();
@@ -148,7 +159,7 @@ mod tests {
         let mut journal = JournalWriter::new(&dir, "gate", "A").unwrap();
         let shared = Arc::new(Mutex::new(SharedState::default()));
         let frame = r#"{"time":1,"channel":"futures.trades","event":"subscribe","error":null,"result":{"status":"success"}}"#;
-        handle_frame(&mut journal, &shared, "A", frame, UnixNanos(1)).unwrap();
+        handle_frame(&mut journal, &shared, &no_alert(), "A", frame, UnixNanos(1)).unwrap();
         assert_eq!(journal.stats().total_rows, 0);
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -160,7 +171,8 @@ mod tests {
         let shared = Arc::new(Mutex::new(SharedState::default()));
         let frame =
             r#"{"time":1,"channel":"futures.system","event":"update","result":{"type":"upgrade"}}"#;
-        let err = handle_frame(&mut journal, &shared, "A", frame, UnixNanos(1)).unwrap_err();
+        let err =
+            handle_frame(&mut journal, &shared, &no_alert(), "A", frame, UnixNanos(1)).unwrap_err();
         assert_eq!(err.code(), "RecorderWs");
         let _ = std::fs::remove_dir_all(&dir);
     }
