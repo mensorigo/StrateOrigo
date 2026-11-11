@@ -2,6 +2,8 @@
 
 mod args;
 mod data_download;
+mod data_ls;
+mod data_normalize;
 mod dispatch;
 mod record;
 

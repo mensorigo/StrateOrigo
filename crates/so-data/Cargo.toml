@@ -1,0 +1,29 @@
+[package]
+name = "so-data"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# so-data：数据层（docs/06）。冷路径 crate：允许堆分配与任意 I/O。
+# 本阶段（M2 首步）只做 normalize：Raw Journal → 统一 Parquet 表。
+[dependencies]
+so-core.workspace = true
+so-model.workspace = true
+so-adapter-gate.workspace = true
+so-recorder.workspace = true
+thiserror.workspace = true
+serde_json.workspace = true
+serde.workspace = true
+tracing.workspace = true
+
+# Raw Journal 读取（与 so-recorder 写入端同版本 zstd）
+zstd = "0.13.3"
+
+# Parquet（docs/06 §4.1 统一表；zstd 压缩）
+arrow = "60.1.0"
+parquet = { version = "60.1.0", features = ["arrow", "zstd"] }
+
+[lints]
+workspace = true

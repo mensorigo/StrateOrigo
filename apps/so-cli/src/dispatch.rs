@@ -32,7 +32,11 @@ pub fn run(command: Command) -> ExitCode {
                 &channel,
             );
         }
-        Command::Data(_) => "M2",
+        Command::Data(DataCommand::Normalize { date }) => {
+            return crate::data_normalize::run(&date);
+        }
+        Command::Data(DataCommand::Ls) => return crate::data_ls::run(),
+        Command::Data(DataCommand::Check { .. }) => "M2",
         Command::Bt { .. } | Command::Exp(_) => "M3",
         Command::Strategy { .. } => "M4",
         Command::Trader(_) | Command::Watch { .. } | Command::Logs(_) => "M5",
