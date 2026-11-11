@@ -197,4 +197,26 @@ if [ "$FAIL" -gt 0 ]; then
     echo "存在失败项：先处理 ❌ 再部署录制器（--fix 可自动装缺的包/swap/rustup）。"
     exit 1
 fi
-echo "环境就绪。下一步：cargo build --release --bin so-cli"
+
+# ---- 9. 编译（环境全部就绪后才执行；--fix 时顺带做）----
+if [ "$FIX" -eq 1 ] || [ "${1:-}" = "--build" ]; then
+    echo ""
+    echo "[9] 编译 release（首次约 3-10 分钟）"
+    if have cargo; then
+        if cargo build --release --bin so-cli 2>&1 | tail -5; then
+            echo "  ✅ target/release/so-cli 构建成功"
+            echo ""
+            echo "运行（前台）： RUST_LOG=info ./target/release/so-cli record -c configs/recording.toml"
+            echo "运行（后台）： nohup ./target/release/so-cli record > recorder.log 2>&1 &"
+        else
+            echo "  ❌ 编译失败（看上方 cargo 输出）"
+            exit 1
+        fi
+    else
+        echo "  ❌ cargo 不可用（第 7 步未通过）"
+        exit 1
+    fi
+else
+    echo "环境就绪。编译：cargo build --release --bin so-cli"
+    echo "（或重跑本脚本加 --build：环境检查 + 编译一步到位）"
+fi
