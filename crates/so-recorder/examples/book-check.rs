@@ -31,8 +31,15 @@ fn main() -> std::process::ExitCode {
     }
     let (scales, scale_source) = load_scales();
     let mut checker = BookCheck::new(scales);
+    // 多文件（A/B 双流 + snapshot）按 ts_recv 全局时序归并喂入：
+    // 快照锚定与增量衔接都依赖严格时序，按文件分批喂会制造人为 Gap。
+    let mut rows: Vec<JournalRow> = Vec::new();
     for file in &args {
-        run_file(file, &mut checker);
+        read_file(file, &mut rows);
+    }
+    rows.sort_by_key(|r| r.ts_recv);
+    for row in &rows {
+        checker.on_row(row);
     }
     let stats = checker.stats();
     let pass = stats.iter().all(|(_, s)| s.snapshot_rate() >= THRESHOLD);
@@ -48,8 +55,8 @@ fn main() -> std::process::ExitCode {
     }
 }
 
-/// 解压一个 Journal 文件喂给 checker（尾帧截断按可恢复部分继续）。
-fn run_file(path: &str, checker: &mut BookCheck) {
+/// 解压一个 Journal 文件的行追加到 `rows`（尾帧截断按可恢复部分继续）。
+fn read_file(path: &str, rows: &mut Vec<JournalRow>) {
     let mut buf = Vec::new();
     File::open(path)
         .unwrap_or_else(|e| panic!("打开 {path} 失败：{e}"))
@@ -66,7 +73,7 @@ fn run_file(path: &str, checker: &mut BookCheck) {
     let text = String::from_utf8_lossy(&all);
     for line in text.lines() {
         if let Ok(row) = serde_json::from_str::<JournalRow>(line) {
-            checker.on_row(&row);
+            rows.push(row);
         }
     }
 }

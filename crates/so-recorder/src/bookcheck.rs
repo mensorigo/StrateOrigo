@@ -118,25 +118,46 @@ impl SymbolReplay {
             };
             if let Err(e) = self.builder.apply_delta(&d) {
                 self.count_error(&e);
-                break; // Gap/StaleSnapshot：整帧已失效，等待新快照重锚
+                if e.code() == "BookStaleSnapshot" {
+                    // 锚定快照早于当前 WS 流（录制启动时序差）：本地簿
+                    // 从未有效，丢弃积压增量，等下一个快照重锚。
+                    self.started = false;
+                }
+                break; // Gap/StaleSnapshot：整帧已失效
             }
         }
     }
 
     /// 帧应用**前**检查待比对快照：若帧起始 ID 已越过快照 id，簿状态
     /// 正好等于快照时点（穿越帧未应用），在此比对。
+    ///
+    /// 簇无效（Gap 作废）时不比对——无效簿与快照的差异是数据缺失的
+    /// 结果而非重建错误；此时快照用作重锚（六步法第 1 步），计 Gap。
     fn maybe_compare(&mut self, incoming_first: u64) {
         let Some(p) = self.pending.take() else {
             return;
         };
-        if p.snapshot_id < incoming_first || incoming_first == 0 {
-            self.compare(p);
-        } else {
+        if p.snapshot_id >= incoming_first && incoming_first != 0 {
             self.pending = Some(p);
+            return;
         }
+        if !self.builder.book().is_valid() {
+            self.stats.gaps = self.stats.gaps.saturating_add(1);
+            if self
+                .builder
+                .apply_snapshot(p.snapshot_id, &p.bids, &p.asks)
+                .is_err()
+            {
+                self.stats.stale = self.stats.stale.saturating_add(1);
+            }
+            return;
+        }
+        self.compare(p);
     }
 
-    /// 比对前 N 档并把快照设为新锚点（与实盘 Gap 重建同构）。
+    /// 比对前 N 档。**比对不重锚**：簿仍有效就继续 Streaming（旧锚点
+    /// 的增量还在连续流，重锚反而把 builder 打回 Buffering，让后续
+    /// 增量全部 StaleSnapshot）。簿无效路径在 [`Self::maybe_compare`]。
     fn compare(&mut self, p: PendingSnapshot) {
         self.stats.comparisons = self.stats.comparisons.saturating_add(1);
         let bid_ok = compare_side(self.builder.book().bids().levels(), &p.bids);
@@ -147,15 +168,6 @@ impl SymbolReplay {
         self.stats.levels_matched = self.stats.levels_matched.saturating_add(n_ok as u64);
         if n_ok == n_total {
             self.stats.matched = self.stats.matched.saturating_add(1);
-        }
-        // 重锚：比对后以该快照为新的重建起点（丢弃 gap 后的悬空状态）。
-        if self
-            .builder
-            .apply_snapshot(p.snapshot_id, &p.bids, &p.asks)
-            .is_err()
-        {
-            // 交叉快照（BookCrossed）：记为异常快照，等下一帧衔接重试。
-            self.stats.stale = self.stats.stale.saturating_add(1);
         }
     }
 
@@ -255,8 +267,8 @@ impl BookCheck {
             // 旧目标在到达比对点前被覆盖：快照间增量断档。
             replay.stats.gaps = replay.stats.gaps.saturating_add(1);
         }
-        if !replay.started {
-            // 首个快照：直接锚定（builder 等待快照；之后的增量可衔接）。
+        if !replay.started || !replay.builder.book().is_valid() {
+            // 首个快照直接锚定；Gap 作废后的快照是重建锚点（六步法第 1 步）。
             replay.start_from(snap);
         } else {
             replay.pending = Some(PendingSnapshot {
