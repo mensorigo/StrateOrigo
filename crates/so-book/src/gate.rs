@@ -120,6 +120,42 @@ impl GateBookBuilder {
         self.book.apply_level(d)
     }
 
+    /// 应用一条**无档位**的增量（`b`/`a` 均空，六步法第 5 步）：
+    /// 只做衔接校验与 ID 推进，不动档位。
+    pub fn apply_empty(&mut self, first_id: u64, last_id: u64) -> Result<(), BookError> {
+        match self.phase {
+            SyncPhase::AwaitingSnapshot => Ok(()), // 未快照：无处衔接
+            SyncPhase::Buffering { base_id } => {
+                let expect = base_id.saturating_add(1);
+                if last_id < expect {
+                    Ok(()) // 太旧，丢弃
+                } else if first_id > expect {
+                    Err(BookError::StaleSnapshot {
+                        base: base_id,
+                        first: first_id,
+                    })
+                } else {
+                    self.book.advance_id(last_id);
+                    self.phase = SyncPhase::Streaming;
+                    Ok(())
+                }
+            }
+            SyncPhase::Streaming => {
+                let expect = self.book.last_id().saturating_add(1);
+                if first_id > expect {
+                    self.book.invalidate();
+                    Err(BookError::Gap {
+                        local: self.book.last_id(),
+                        incoming: first_id,
+                    })
+                } else {
+                    self.book.advance_id(last_id);
+                    Ok(())
+                }
+            }
+        }
+    }
+
     /// Gap / StaleSnapshot 后重置：订单簿作废，等新快照。
     pub fn reset(&mut self) {
         self.book.invalidate();
@@ -227,8 +263,8 @@ mod tests {
     fn empty_delta_advances_id() {
         let mut g = GateBookBuilder::new();
         g.apply_snapshot(10, &[], &[]).unwrap();
-        // 第 5 步：b/a 为空的增量也推进 id——由 advance 语义承载
-        g.apply_delta(&d(10, 13, Side::Bid, 100, 0)).unwrap();
+        // 第 5 步：b/a 为空的增量也推进 id
+        g.apply_empty(10, 13).unwrap();
         assert_eq!(g.book().last_id(), 13);
     }
 

@@ -12,4 +12,4 @@ pub mod side;
 pub use book::OrderBook;
 pub use error::BookError;
 pub use gate::{GateBookBuilder, GateSequencer};
-pub use side::BookSide;
+pub use side::{BookSide, Level};
