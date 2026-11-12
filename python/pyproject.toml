@@ -49,6 +49,12 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["PLR0915"]  # 性质测试可以较长
 
+[tool.ruff.lint.pylint]
+# 函数长度上限（docs/04 F5）：与 Rust 侧的 clippy `too_many_lines` 同一约束的两种表达。
+# 不配这一项时 ruff 的默认值是 50，与 F5 写明的 40 不一致——文档与配置只留一个定义处（A4），
+# 以文档为准。
+max-statements = 40
+
 [tool.pyright]
 include = ["src", "tests"]
 typeCheckingMode = "strict"

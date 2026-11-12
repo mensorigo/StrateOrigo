@@ -152,7 +152,7 @@ M1 优先接入。品种命名 `BTC-USDT-SWAP`（连字符，**不是** Gate 的
 | `settleCcy` | 保证金/结算币 | S2 现货-永续对腿匹配 |
 | `tickSz` | 价格最小变动 | `Price::round_to_step` |
 | `lotSz` / `minSz` | 数量步长 / 最小下单量 | sz 必须是 lotSz 倍数（违规 51121）且 ≥ minSz |
-| `maxLmtSz` / `maxMktSz` | 单笔限价/市价最大量（市价为 USDT 计） | 风控 L1 |
+| `maxLmtSz` / `maxMktSz` | 单笔限价/市价最大量（市价为 USDT 计） | 风控 RK-L1 |
 | `lever` | 品种杠杆上限（账户实际可用更低） | 风控 |
 | `state` | `live / suspend / post_only / preopen / test / settling...` | 只交易 `live`；`post_only` 只收 post-only 单 |
 | `listTime` / `expTime` | 上市/下架时间 | 时点元数据（06 §4.2） |
@@ -188,7 +188,7 @@ M1 优先接入。品种命名 `BTC-USDT-SWAP`（连字符，**不是** Gate 的
 | funding-rate | 10 次/2s | IP + 品种 |
 | WS 订阅请求 | 480 次/小时 | 连接 |
 
-- **REST 与 WS 下单共享同一限额**——L1 风控令牌桶必须合并两通道计数。
+- **REST 与 WS 下单共享同一限额**——RK-L1 风控令牌桶必须合并两通道计数。
 - **子账户级限频**：下单+改单合计 1,000 次/2s（错误码 50061）；VIP5+ 按成交率分层可升至 10,000 次/2s（成交率 = 成交量 USDT / 加权请求数，含 symbol multiplier）。ADR-0001 一账户一策略下，此限制按子账户独立计算。
 - 改单并发上限：每单同时最多 3 个在途 amend（错误码 51513）。
 - `GET /api/v5/trade/account-rate-limit` 查询当前实际限频与成交率（每日 08:00 UTC 更新）。
@@ -216,7 +216,7 @@ M1 优先接入。品种命名 `BTC-USDT-SWAP`（连字符，**不是** Gate 的
 | `clOrdId` | 客户端订单 ID，≤32 字符字母数字——`ClientOrderId` 编码（03 §3）映射到此 |
 | 改单 | `POST /api/v5/trade/amend-order`（每单在途 amend ≤ 3） |
 | 撤单 | `POST /api/v5/trade/cancel-order`、批量、`POST /api/v5/trade/cancel-all-orders` |
-| **Dead Man's Switch** | `POST /api/v5/trade/cancel-all-after`（超时毫秒数，到期自动撤单；续期即重发）——so-guardian L3 的 DMS 方案用此接口 |
+| **Dead Man's Switch** | `POST /api/v5/trade/cancel-all-after`（超时毫秒数，到期自动撤单；续期即重发）——so-guardian RK-L3 的 DMS 方案用此接口 |
 | 超时保护 | 请求头/WS 参数 `expTime`：服务器时间超过后丢弃请求（不处理），防网络延迟导致的迟到单 |
 | 订单状态推送 | 私有频道 `orders`（全生命周期，含 `state`、`avgPx`、`accFillSz`、`fee`）、`fills` 成交频道 |
 | 持仓模式 | `net` 单向 / `longShort` 双向（`POST /api/v5/account/set-position-mode`） |
@@ -227,7 +227,7 @@ M1 优先接入。品种命名 `BTC-USDT-SWAP`（连字符，**不是** Gate 的
 1. **`so-book` 的 OKX 校验只用 `seqId`/`prevSeqId`**，无校验和（docs/03 §5 的"OKX 校验和"描述过时，需修订）；序列重置（seqId 变小）与缺口（prevSeqId 断裂）要区分处理。
 2. **深度增量 `sz` 是覆盖量**（该档最新总量，非增量），与 Gate 相同；但 OKX 无 Gate 式 REST 快照-增量衔接六步法，重订订阅拿 snapshot 即可。
 3. **`trades` 频道是聚合推送**（tradeId 为聚合内最后一笔、count 为笔数）——06 §4.1 `trade` 表的 `trade_id` 语义在 OKX 上要按聚合记录，HF 逐笔需求用 REST `trades-history`/Tardis 补。
-4. **REST 与 WS 下单共享限频**，L1 风控令牌桶（03 §7）必须合并计数；另有子账户级 1,000 次/2s 总闸与成交率分层（VIP5+）。
+4. **REST 与 WS 下单共享限频**，RK-L1 风控令牌桶（03 §7）必须合并计数；另有子账户级 1,000 次/2s 总闸与成交率分层（VIP5+）。
 5. **合约"张"换算**：`ctVal`（linear 为 base 币数量）——`Qty` 统一用币数量，适配器负责换算（同 Gate `quanto_multiplier`）。
 6. `expTime` 请求级超时 + `50004` 超时错误 = OKX 版的"Unknown 状态对账"路径（03 §6），设计已覆盖。
 7. 服务器 30s 无数据主动断连（close 4004）+ 60s 空推送心跳——`so-recorder` 的静默断流检测（06 §3.2 A5）阈值要与此对齐。

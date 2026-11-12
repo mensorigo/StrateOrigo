@@ -9,7 +9,7 @@
 | 工具 | 版本 | 用途 | 备注 |
 |---|---|---|---|
 | Rust | **1.99.1**（stable，2026-10-13） | 核心语言 | `rust-toolchain.toml` 固定；edition **2024** |
-| Cargo | 0.100.0（随 Rust 1.99） | 构建 | |
+| Cargo | 1.99.1（与 rustc 同版本号） | 构建 | |
 | cargo-nextest | lock 时锁定 | 测试运行器 | `cargo install cargo-nextest --locked` |
 | cargo-deny | lock 时锁定 | 许可证/漏洞/重复依赖检查 | CI 必跑 |
 | Python | **3.12.x**（本机 3.12.6） | 研究环境 | numpy 2.5 / scipy 1.18 / xgboost 3.4 要求 ≥3.12 |
@@ -59,7 +59,7 @@
 | sonic-rs | 0.5.10 | 高性能 JSON 解析（行情热路径首选） |
 | simd-json | 0.19.0 | 备选 JSON 解析器（两者做基准测试后二选一） |
 | rkyv | 0.8.18 | 零拷贝序列化（Raw Journal 帧、快照） |
-| tokio-tungstenite | 0.30.0 | WebSocket 客户端 |
+| tokio-tungstenite | 0.28.0 | WebSocket 客户端 |
 | fastwebsockets | 0.10.0 | 备选低延迟 WS（基准测试后决定） |
 | reqwest | 0.13.5 | REST（下单备用通道、快照、对账） |
 | hmac / sha2 | 0.13.0 / 0.11.1 | 交易所签名：OKX 为 HMAC-SHA256 + Base64（另需 Passphrase），Gate 为 HMAC-SHA512（以官方文档为准） |
@@ -183,7 +183,7 @@
 ## 6. 版本管理策略
 
 1. **锁文件入库**：`Cargo.lock`、`apps/so-desktop/Cargo.lock`、`python/uv.lock` 全部提交。
-2. **工具链固定**：`rust-toolchain.toml` 写 `channel = "1.99.1"`；`.python-version` 写 `3.12`。
+2. **工具链固定**：`rust-toolchain.toml` 写 `channel = "stable"`（避免 rustup 另装一份同版本工具链），真正的版本固定是工作区 `Cargo.toml` 的 `rust-version = "1.99.1"` + `scripts/check.ps1` 校验 rustc 版本；`.python-version` 写 `3.12`。升级 Rust 时三处一起改。
 3. **依赖声明**：根 `Cargo.toml` 使用 `[workspace.dependencies]` 统一声明版本，成员 crate 一律 `xxx.workspace = true`。
 4. **升级节奏**：每月一个升级窗口，单独分支；升级后必须通过：全量测试 + 基准无回退 + 回测快照一致（或已解释的差异）。
 5. **冻结期**：实盘新部署前 7 天内不升级任何依赖。

@@ -43,10 +43,10 @@ gantt
 
 **交付物**
 - `docs/venues/okx.md`、`docs/venues/gate.md`（基于当前官方文档：WS/REST 端点、深度增量与校验规则、限频、连接寿命、错误码、签名方式）。
-- `so-adapter-okx` 行情解析（先做）：深度增量、BBO、逐笔、标记价/资金费、强平；`MarketDataGateway` trait 与 `VenueCapabilities`。
-- `so-adapter-gate` 行情解析（后做，同时检验适配器抽象是否通用）。
+- `so-adapter-gate` 行情解析（**先做**）：深度增量、BBO、逐笔、标记价/资金费；`MarketDataGateway` trait 与 `VenueCapabilities`。
+- `so-adapter-okx` 行情解析（**后置**，用户指示 Gate 优先）：同时检验适配器抽象是否通用。启动前须先把 OKX 官方文档整理到 `docs/venues/`（[04 §5.5](04-dev-constraints.md)），不凭记忆写字段名。
 - `so-recorder`：双连接冗余、去重、Raw Journal、连接轮换、静默断流检测、定时 REST 快照、小时滚动 + sha256、Telegram 告警。
-- `so-cli data download`：OKX / Gate 官方历史数据下载（断点续传 + 校验和）；Tardis 下载器（如购买）。
+- `so-cli data download`：Gate 官方历史数据下载（断点续传 + 校验和，已落地）；OKX 下载器随其适配器后置；Tardis 下载器（如购买）。
 - VPS 选址测试：候选区域各运行 **1 天**，比较 `ts_recv - ts_exch` 分布（2026-11-10 调整，原 3 天）。
 - 同步脚本：Raw Journal 回传本地并校验。
 
@@ -136,8 +136,8 @@ gantt
 ## M6 · 小资金实盘（约 6 周）
 
 **交付物**
-- `so-adapter-okx` 交易部分：WS 下单/撤单、私有频道回报、REST 对账、限频管理、Unknown 状态处理；永续 + 现货（S2 需要）。
-- **`demo` 模式**：先在 OKX 模拟交易环境跑通完整交易流程（签名、下单、撤单、回报、对账、断线恢复、故障注入），再用真实资金。
+- `so-adapter-okx` 交易部分（**后置**）：WS 下单/撤单、私有频道回报、REST 对账、限频管理、Unknown 状态处理；永续 + 现货（S2 需要）。
+- **`demo` 模式**：先在 Gate 测试网跑通完整交易流程（签名、下单、撤单、回报、对账、断线恢复、故障注入），再用真实资金。
 - 实盘启动校验：一个交易所一个账户、一个策略（04 S9）；为该策略开设专用子账户与专用 API Key。
 - 影子盘：实盘策略同时在模拟盘以相同参数运行，每日输出"真实成交 vs 模拟成交"偏差报告，用于校准撮合模拟器。
 - `so-guardian`：心跳、独立账户查询、硬止损、交易所侧 Dead Man's Switch、告警。

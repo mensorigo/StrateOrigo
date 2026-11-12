@@ -87,7 +87,7 @@ Rust 的错误是值（`Result`），"统一"靠以下约定，而不是全局 t
 | E1 | **每个域一个错误枚举**：库 crate 用 `thiserror` 定义本域错误（`so_core::FixedError`，将来的 `OmsError`、`RiskError`、适配器错误各归各的 crate）。禁止字符串当错误类型；`anyhow` 只在二进制内使用，不跨库边界传播 |
 | E2 | **跨边界错误带稳定错误码**：每个错误枚举实现 `code()`，取值为 `<域前缀><变体>` 的 PascalCase。域前缀与全部现有码见下方**错误码登记表**；码**全局唯一**、**只增不改名**，改名等同破坏接口、须新 ADR |
 | E3 | **映射只发生在边界**：so-proto 把域错误映射为 gRPC status（details 带错误码）；so-py 按下方 Python 映射表映射为异常。映射表在 so-proto / so-py 内各一个文件，与登记表同步维护，并有测试断言两侧集合一致 |
-| E4 | **错误分级**：可自动恢复的（重连、重建订单簿、限频退避）记 WARN；需要人工处理的（对账不一致、Unknown 超时、配置校验失败）才是 ERROR（L2） |
+| E4 | **错误分级**：可自动恢复的（重连、重建订单簿、限频退避）记 WARN；需要人工处理的（对账不一致、Unknown 超时、配置校验失败）才是 ERROR（G2） |
 | E5 | **热路径错误只能返回或降级**：返回 `Result`、拒绝订单、进入只减仓；不得重试阻塞（H3）、不得 panic（H6） |
 | E6 | **`code()` 不带参数**：码本身不含数据，需要上下文的信息放命名字段（E7）。`Copy` 枚举用 `const fn code(self)`，非 `Copy` 用 `fn code(&self)` |
 | E7 | **上下文用命名字段而非拼字符串**：`Parse { channel, symbol }` 优于 `Parse(String)`。裸 `String` 只允许承载**外部工具或 OS 的原文**（如 `DataError::Journal(String)`），且只用于 `Display`，不参与 `code()` 判别 |
@@ -107,7 +107,7 @@ Rust 的错误是值（`Result`），"统一"靠以下约定，而不是全局 t
 | 遥测 | `so_telemetry::TelemetryError`（`so-telemetry/src/error.rs`） | `Telemetry*` | `TelemetryFilter`、`TelemetryFile`、`TelemetryInit` |
 | Journal | `so_journal::JournalError`（`so-journal/src/error.rs`） | `Journal*` | `JournalOpen`、`JournalWrite`、`JournalRead`、`JournalCodec`、`JournalRow`、`JournalNotRolled`、`JournalChecksum`、`JournalChecksumMismatch` |
 | CLI 边界 | `so-cli` 的 `exit.rs`（`apps/so-cli/src/exit.rs`） | `Cli*` | `CliNotFound`、`CliPermissionDenied`、`CliAlreadyExists`、`CliInvalidInput`、`CliTimedOut`、`CliConnection`、`CliIo`、`CliUsage`、`CliNoData`、`CliRuntime`（标准库 `io::Error` 无 `code()`，在边界统一成 CLI 码） |
-| 尚未创建 | `so-engine` / `so-risk` / `so-oms` / `so-backtest` / `so-lab` / `so-proto` | `Engine*` / `Risk*` / `Oms*` / `Backtest*` / `Lab*` / `Proto*` | 建 crate 时在此登记 |
+| 尚未创建 | `so-engine` / `so-risk` / `so-oms` / `so-backtest` / `so-selector` / `so-lab` / `so-proto` | `Engine*` / `Risk*` / `Oms*` / `Backtest*` / `Selector*` / `Lab*` / `Proto*` | 建 crate 时在此登记（前缀先占用，避免届时撞车） |
 
 **Python 异常映射**（E3；过渡期状态见 `docs/pending-items.md`）：
 
@@ -152,36 +152,69 @@ Rust 的错误是值（`Result`），"统一"靠以下约定，而不是全局 t
 
 所以 `L` 不再是任何规则编号的前缀，规则编号与领域级别不会再撞车。
 
-| 层 | crate |
-|---|---|
-| `层0` | `so-core` |
-| `层1` | `so-model`、`so-telemetry`、`so-py` |
-| `层2` | `so-adapter-gate`、`so-book`、`so-journal`、`so-strategy`、`so-signal`、`so-exec`、`so-portfolio` |
-| `层3` | `so-risk`、`so-oms`、`so-engine`、`so-backtest`、`so-data`、`so-recorder` |
-| `层4` | `so-adapters/*`（`so-adapter-okx`、`so-adapter-ibkr` 等含连接/下单的适配器）、`so-lab`、`so-proto` |
-| `层5` | `apps/*`（`so-cli`、`so-trader`、`so-guardian` 等二进制） |
+| 层 | crate | 状态 |
+|---|---|---|
+| `层0` | `so-core` | 已建 |
+| `层1` | `so-model`、`so-telemetry` | 已建 |
+| `层2` | `so-adapter-gate`、`so-book`、`so-journal` | 已建 |
+| | `so-strategy`、`so-signal`、`so-exec`、`so-portfolio`、`so-selector` | 规划（M3+） |
+| `层3` | `so-data`、`so-recorder` | 已建 |
+| | `so-risk`、`so-oms`、`so-engine`、`so-backtest`、`st-*` | 规划（M3+） |
+| `层4` | `so-py` | 已建 |
+| | `so-adapters/*`（`so-adapter-okx`、`so-adapter-ibkr` 等含连接/下单的适配器）、`so-lab`、`so-proto` | 规划（M4+） |
+| `层5` | `so-cli` | 已建 |
+| | `so-trader`、`so-guardian` | 规划（M4+） |
+
+> 第二格续行（第一格留空）与首行同义：`scripts/check-deps.ps1` 会继承上一行的层号，
+> 所以**已建与规划一视同仁地登记**，只是状态不同。规划项在建成前不会出现在
+> `cargo metadata` 里，因此"未登记即失败"的检查对它们不生效——这是刻意的：
+> 它检查的是"代码里有的必须在表里"，而不是"表里的必须已存在"。
 
 > `so-adapter-gate` 在 `层2` 而非 `层4`：它只依赖 `so-core` + `so-model`，是**纯解析**
 > 适配器（热路径、无网络），任何 `层3` 的数据/录制代码都可以直接用它。
 > `层4` 留给需要连接与下单能力的适配器——那里才有 `tokio` 这类重依赖。
 
+> `so-py` 在 `层4` 而非 `层1`：PyO3 绑定**是边界**，和 `so-proto`（gRPC 边界）同类。
+> Python 侧的 `strateorigo.data.load`、`backtest.run` 要直连 `so-data` / `so-backtest`
+> （[03 §9.1](03-module-design.md#9-研究与验证so-py--strateorigo-python-包)、[05 M3](05-roadmap.md)），
+> 而绑定层**不得**依赖高层——把绑定放在 `层1` 会让"Python 能调回测"变成
+> `层1 → 层3` 的方向违规。放 `层4` 则 `层4 → 层3` 天然合法。
+> 绑定层只做类型转换与转发，不含策略逻辑（A3 的另一面：`so-py` 也不得被任何 `层0`–`层3` crate 依赖）。
+
+> `st-*`（`crates/strategies/` 下的策略 crate）在 `层3`：它们依赖 `so-strategy` /
+> `so-signal` / `so-exec`（`层2`），本身**不是** `层2` 组件。曾被漏登记过——
+> 图中画在 `层2` 框里、表中完全没有，`st-mm-basic` 落地当天才会由检查 1 报出。
+
 | # | 规则 |
 |---|---|
 | A1 | **依赖只能由高编号层指向低编号层**；同层依赖须登记在下表（现状 + 消除计划），不得擅自新增 |
 | A2 | **禁止循环依赖**：`cargo` 会在 crate 粒度报错，但模块之间的循环要靠人守（模块内同样禁止） |
-| A3 | `so-engine` **不得依赖** `so-adapters/*`、`tokio`、任何网络库、任何 GUI crate；策略 crate 只能依赖 `so-strategy`、`so-signal`、`so-exec` 及其重新导出的类型 |
+| A3 | `so-engine` **不得依赖** `so-adapters/*`、`tokio`、任何网络库、任何 GUI crate；策略 crate 只能依赖 `so-strategy`、`so-signal`、`so-exec` 及其重新导出的类型。**本条的禁止项由 `check-deps.ps1` 检查 4b 机检**：`so-engine` 一旦存在，其依赖里出现 `tokio`/`hyper`/`reqwest`/`tokio-tungstenite`/`rustls` 等即失败（"不存在则跳过"，所以现在不会误报） |
 | A4 | **限制只在定义处校验一次**：模式与密钥规则、精度、限额在各自的属主 crate 校验（`so-core::RunMode`、`so-risk`），上层只调用；禁止同一规则在多处重复实现 |
 | A5 | **服务端完全无头**：服务端二进制不得依赖任何 GUI crate（`deny.toml` 的 `[bans]` 强制）；桌面端是独立 workspace，只消费 `so-proto` / `so-lab` 的数据 |
 | A6 | **新增依赖须说明理由**：热路径 crate 新增任何依赖、任何 crate 新增网络/异步/GUI 依赖，须在提交信息里写明用途与替代方案 |
-| A7 | 依赖表由 `scripts/check-deps.ps1` 对 `cargo metadata` 机检（出现表外依赖边即失败），接入 `scripts/check.ps1` |
+| A7 | 依赖表由 `scripts/check-deps.ps1` 对 `cargo metadata` 机检（出现表外依赖边即失败），接入 `scripts/check.ps1`。**机检的范围是本表的层级登记顺序**，与 docs/03 §1 的仓库树互为补充：树管"文件放哪"，表管"能依赖谁" |
 
-**同层依赖例外表**（当前为空；每次新增都要写清消除计划，并接受"上游不存在即失败"的检查）：
+**同层依赖例外表**
 
-| 依赖边 | 层 | 现状 | 消除计划 |
+现状一列为 `规划` 的边，其两端 crate 尚未建立，因此**不会出现在 `cargo metadata` 里**；
+`check-deps.ps1` 对这些行按"两端都存在才校验"处理（见脚本检查 2b 的平台过滤），
+建成后自动开始机检——**不需要**建 crate 时回头补登记。
+
+| 依赖边 | 层 | 现状 | 理由与消除计划 |
 |---|---|---|---|
-| （空） | — | — | — |
+| `so-backtest → so-engine` | 层3 → 层3 | 规划 | 回测 harness **驱动**实测同一内核（03 §8：回测与实盘共用内核，不得为回测复制一份引擎）。这是"同一内核、另一个驱动器"的**有意设计**，不是可消除的瑕疵；边界靠"内核不得反向依赖回测"守住（`so-engine` 永不依赖 `so-backtest`，由检查 2 的方向规则强制） |
+| `so-backtest → so-data` | 层3 → 层3 | 规划 | 回测直接读数据集（Parquet + 数据集哈希，06 §9）。**可消除**：把"读数据集 → 喂 Feed"的适配下沉到 `层2`，让两端都依赖它（同 ADR-0016 用 `so-journal` 消除 `so-data → so-recorder` 的手法）。M3 设计时决定是否值得 |
+| `so-exec → so-strategy` | 层2 → 层2 | 规划 | 执行算法实现 `ExecPolicy` trait，trait 定义在 `so-strategy`（03 §4.1）。"接口与其实现同层"是常规做法，但按 A1 仍须登记。**消除计划**：把 `ExecPolicy` 等**契约 trait** 移到更低层（`so-core` 或新的 `so-traits`），`so-exec` 与 `so-strategy` 都只依赖契约。M3 定 |
+
+> 当前 `cargo metadata` 的 workspace 边里**没有同层边**；上表三行都是规划边，
+> 建成后自动转入机检（检查 2b 对"两端未齐"的行不判过期）。
+> `st-*`（策略 crate）**不在此表**：它在 `层3` 依赖 `层2` 的 `so-strategy`，
+> 是真方向，不是同层例外——曾因漏登记而被误当同层边画进图里。
 
 > `so-data → so-recorder` 曾是这里唯一的例外，已由下沉 `so-journal` 消除（ADR-0016）。
+> `so-selector`（ADR-0018）由 **`so-engine`（层3）调用**，策略只消费"选品结果"这个数据，
+> 因此**不产生**同层边——`so-engine → so-selector` 是 `层3 → 层2`，合法。
 
 ### 3.6 日志（G）
 
@@ -210,7 +243,7 @@ Rust 的错误是值（`Result`），"统一"靠以下约定，而不是全局 t
 | 性质测试 | proptest / hypothesis | 定点运算、订单簿、OMS 状态机、撮合模拟器（不变量：仓位守恒、资金守恒、状态只能合法迁移） |
 | 快照测试 | insta | 交易所消息解析、回测结果 |
 | 回放测试 | 录制的真实交易所消息 | 每个适配器：行情解析、订单回报、断线重连、序列缺口 |
-| 对照测试 | hftbacktest | L2 回测器（M3） |
+| 对照测试 | hftbacktest | `BT-L2` 回测器（M3） |
 | 基准测试 | criterion | 热路径 |
 | 故障注入 | 自研 chaos 测试工具 | 断网、交易所返回 5xx/限频、回报延迟/丢失/乱序、进程被杀、时钟跳变 |
 | 模拟盘 | Paper 模式 | 实盘前必经 |
@@ -253,7 +286,19 @@ Rust 的错误是值（`Result`），"统一"靠以下约定，而不是全局 t
 
 ### 5.7 规则变更
 
-新增规则必须先写 ADR（说明触发现状与取舍），再改本文，最后改引用方；规则编号只增、不改、不复用，废弃规则标~~删除线~~并注明替代项。
+新增规则必须先写 ADR（说明触发现状与取舍），再改本文，最后改引用方。
+
+**编号只增、不改、不复用**；废弃规则标~~删除线~~并注明替代项，编号本身不被回收。
+
+**唯一一次例外**：编号体系自身的可检索性被破坏时，改编号属于**修复**而非重命名。
+理由是编号的全部价值就是"扫一眼知道指向哪条"（见本节开头），一旦一个前缀指三样东西，
+体系就失效了。边界（三条同时满足才允许）：
+
+1. 先写 ADR，说清"哪个符号一名几用、为什么动它而不是动别人"（先例：[ADR-0017](decisions/ADR-0017-rule-id-disambiguation.md)，日志 `L`→`G`）；
+2. **只动编号字面量**，不动任何规则的语义、条目顺序或编号值（`L4`→`G4` 仍指同一条）；
+3. 一次性改完所有引用（文档 + 代码注释），**不保留双编号过渡期**——保留旧的等于没改。
+
+除上述情形外，"只增不改"没有例外；改名请求一律按新增规则处理（新编号 + 旧编号标删除线）。
 
 ## 6. 安全规则（S）
 
@@ -263,7 +308,7 @@ Rust 的错误是值（`Result`），"统一"靠以下约定，而不是全局 t
 | S2 | 密钥不入仓库、不入日志、不入实验库；VPS 上用权限 600 的文件或 `systemd-creds` 加密存储；`.gitignore` 包含 `*.key`、`.env*`、`secrets/` |
 | S3 | 私钥/Secret 与 OKX Passphrase 不离开 VPS；交易所支持非对称密钥时优先使用 |
 | S4 | 控制面只监听 WireGuard/Tailscale 接口；mTLS 或 Token；写操作审计 |
-| S5 | VPS：SSH 仅密钥登录、禁 root 登录、防火墙默认拒绝、自动安全更新（交易时段外重启） |
+| S5 | VPS：SSH 仅密钥登录、防火墙默认拒绝、自动安全更新（交易时段外重启）。**主机加固的具体口径由部署方按所在地与合规要求自行决定**，本文不规定 |
 | S6 | 子账户隔离：**每个实盘策略一个交易所子账户**（ADR-0001），限制单点损失 |
 | S7 | 依赖供应链：`cargo deny`、锁文件、不使用 git 依赖（gpui 系列除外，且须锁定 rev 或精确版本） |
 | S8 | **模拟盘不加载密钥**：`backtest` / `paper` 模式下，配置加载器遇到 `key_file` 字段或读取密钥目录即报错退出；模拟盘进程以无权读取密钥目录的系统用户运行 |

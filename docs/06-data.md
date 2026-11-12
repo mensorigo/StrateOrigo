@@ -10,7 +10,7 @@
 
 | 数据类型 | HF 做市/微观结构 | 跨所价差 | 资金费率套利 | MF/LF 统计/趋势 | 股票 LF |
 |---|---|---|---|---|---|
-| L2 深度增量 + 快照 | ●必需 | ●必需 | ○ | ○ | — |
+| BK-L2 深度增量 + 快照 | ●必需 | ●必需 | ○ | ○ | — |
 | BBO（最优买卖价） | ●必需 | ●必需 | ●必需 | ○ | ○ |
 | 逐笔成交 | ●必需 | ●必需 | ○ | ●（生成 Bar） | — |
 | 标记价格 / 指数价格 | ● | ● | ●必需 | ○ | — |
@@ -84,9 +84,14 @@ flowchart LR
 
 ### 3.3 采集范围（首期）
 
-- 交易所：OKX 永续 SWAP + 现货（M1 前半），Gate USDT 永续 + 现货（M1 后半）。两所同时录制，为跨所研究积累数据。
+- 交易所：**Gate USDT 永续 + 现货（先做）**；OKX 永续 SWAP + 现货**后置**（用户指示 Gate 优先，见 [pending-items #3](pending-items.md)；启动前须先把 OKX 官方文档整理到 `docs/venues/`，[04 §5.5](04-dev-constraints.md)）。两所最终同时录制，为跨所研究积累数据。
 - **可选**：只录制、不交易的参考行情（如 Binance 的 BBO/逐笔），作为领先-滞后研究的信号源；不需要账户。
-- 品种：按 24h 成交额前 N（初定 20）的永续合约 + 对应现货；品种列表写在 `configs/recording.toml`，变更有记录。
+- 品种（**录制面**，[ADR-0018](decisions/ADR-0018-universe-and-symbol-selection.md)）：`configs/recording.toml` 的 `mode` 决定订阅哪些品种——
+  - `list`（**默认，即现状**）：配置里显式名单（1 个起；当前 10 个）；
+  - `top`：按规则（如 24h 成交额前 N + `pin`）定时重算、增删订阅；新订阅须按 gate.md §3.2 六步拉快照对齐 `U/u`；名单是**派生结果**，重算写回并留痕（规则、参数、contracts 快照哈希）；
+  - `all`：该结算币种全部在交易合约（Gate USDT 永续实测 1065 个，2026-11-11 快照；单连接订阅上限未核实，吞吐与存储实测后再启用）。
+  **交易面是录制面的子集**，由策略配置 `[symbols]` 或选品器决定——策略能下单的品种必须已被录制覆盖。
+  > 现货当前**未录制**（`recording.toml` 仅 4 个 `futures.*` 频道）；现货解析已备（`so-adapter-gate/src/spot.rs`），S2 需要现货腿时按 `spot.*` 频道加入录制。
 - 频道：深度增量（交易所支持的最快频率）、BBO、逐笔、标记价/资金费、强平；REST：深度快照、元数据、OI、资金费历史。
 - 存储量**需在 M1 第一周实测**，再据此确定 VPS 磁盘与同步策略。
 
@@ -221,4 +226,4 @@ excluded_intervals = 42
 | 确定性 | 文件遍历顺序、行排序、去重顺序都显式固定；验收测试是"两次运行逐位一致" | D1、D3 |
 | 错误 | 只返回 `DataError` / `RecorderError` / `JournalError`；上下文用命名字段，不拼字符串；库代码不出现 `unwrap()` | E1–E7、E9 |
 | 格式归属 | Journal 的**文件格式与读写**只在 `so-journal`（层2）：读端与写端共用同一份换算与帧定义，不各自实现 | A1、I13、[ADR-0016](decisions/ADR-0016-journal-crate-extraction.md) |
-| 日志字段 | 与 03 §18.3、04 §3.6 G5 一致：`venue`、`symbol`、`channel`、`date`、`rows`、`files`、`code` | L5 |
+| 日志字段 | 与 03 §18.3、04 §3.6 G5 一致：`venue`、`symbol`、`channel`、`date`、`rows`、`files`、`code` | G5 |

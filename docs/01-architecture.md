@@ -73,7 +73,7 @@ flowchart LR
 | `so-trader`（实盘实例） | VPS | 行情接入、订单簿、策略、事前风控、组合风控、OMS、执行、控制面 API、审计落盘。**一个实例 = 一个真实账户 + 一个策略**（见 §3.2） | 该策略停止；守护进程接管撤单/平仓 |
 | `so-trader`（模拟盘实例） | VPS 或本地 | 同一程序以 `paper` 模式运行：多个虚拟账户 + 多个策略，用于验证；**不加载任何 API Key** | 仅影响验证，不影响实盘 |
 | `so-guardian` | VPS（另起进程，可另在第二台机器部署心跳监控） | 独立查询**真实**账户、心跳监测实盘实例、触发熔断（撤单/平仓）、告警；不监控模拟盘 | 失去兜底，实盘实例进入 reduce-only 并告警 |
-| `so-recorder` | VPS | 独立订阅公共行情，写原始日志与 Parquet | 研究数据缺口，不影响交易 |
+| `so-recorder` | VPS | 独立订阅公共行情，写 **Raw Journal**（按小时滚动的 JSONL + zstd + sha256 边车）；**不写 Parquet**——Parquet 由 `so-data` 的 normalize 从 Journal 生成（03 §10） | 研究数据缺口，不影响交易 |
 | `so-cli` | 本地 / VPS | **主要操作入口**：数据下载/清洗、回测、实验查询、部署、`watch` 终端实时监控、Kill Switch | 无 |
 | `so-desktop`（P2） | 本地 | 图形化监控与管理 | 无交易影响 |
 | Python 研究 | 本地 | 研究、优化、验证，调用 `so-py` 绑定 | 无 |

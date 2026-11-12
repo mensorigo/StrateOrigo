@@ -148,7 +148,7 @@ M1 优先接入。频道名前缀 `futures.`。
 | `type` | `inverse` 反向 / `direct` 正向 | 品种分类 |
 | `quanto_multiplier` | 一张合约的面值（标的币数量） | **张数 ↔ 币数换算**；Gate 合约以"张"计价 |
 | `order_price_round` | 委托价最小单位（tick） | `Price::round_to_step` |
-| `order_size_min` / `order_size_max` | 张数上下限（字符串） | 风控 L1 |
+| `order_size_min` / `order_size_max` | 张数上下限（字符串） | 风控 RK-L1 |
 | `order_price_deviate` | 下单价相对标记价的最大偏移比率 | 价格带风控 |
 | `leverage_min` / `leverage_max` | 杠杆范围 | 风控 |
 | `maintenance_rate` | 第一档维持保证金率 | 强平价计算 |
@@ -156,7 +156,7 @@ M1 优先接入。频道名前缀 `futures.`。
 | `funding_rate` / `funding_interval` / `funding_next_apply` | 当前资金费率（字符串小数）/ 应用间隔秒 / 下次应用时间 | S2 策略 |
 | `funding_rate_limit` | 资金费率上限 | 极端行情建模 |
 | `mark_price` / `index_price` / `last_price` | 标记/指数/最新价 | 启动比对 |
-| `orders_limit` | 每用户该盘口最大挂单数 | 风控 L1 `max_open_orders` |
+| `orders_limit` | 每用户该盘口最大挂单数 | 风控 RK-L1 `max_open_orders` |
 | `status` | `prelaunch / trading / delisting / delisted / circuit_breaker` | 只交易 `trading`；`delisting` 只减仓 |
 | `in_delisting` | 下架过渡期只允许 reduce-only | 交易过滤 |
 | `enable_decimal` | 是否支持小数张数 | size 解析方式 |
@@ -213,8 +213,8 @@ METHOD \n URL路径(含 /api/v4) \n QueryString(未编码,顺序与实际一致)
 | WS 下单 | 现货 10r/s；合约 100r/s | UID |
 
 - 限速按子账号/主账号**分别**计算。
-- **成交率惩罚**（注意！）：24h 内请求 > 86,400 次且零成交 → 下一小时下单限到 10r/10s；成交率 < 1% → 20r/10s。做市类策略（挂撤频繁）必须在 L1 风控里对**成交率**设限，不只是请求速率。
-- `so-trader` 的 L1 频率限制取上表的 80%（01 §10）。
+- **成交率惩罚**（注意！）：24h 内请求 > 86,400 次且零成交 → 下一小时下单限到 10r/10s；成交率 < 1% → 20r/10s。做市类策略（挂撤频繁）必须在 RK-L1 风控里对**成交率**设限，不只是请求速率。
+- `so-trader` 的 RK-L1 频率限制取上表的 80%（01 §10）。
 
 ### 5.3 错误处理
 
@@ -242,5 +242,5 @@ METHOD \n URL路径(含 /api/v4) \n QueryString(未编码,顺序与实际一致)
 2. 合约"张"与币的换算（`quanto_multiplier`）在 `Instrument` 元数据中体现；`Qty` 统一用币数量，适配器负责换算。
 3. 两个市场两套深度格式（现货数组对、合约对象），适配器解析层分开文件（F3）。
 4. `is_internal=true` 成交不入 K 线（官方行为），回测撮合也应排除——写进 so-backtest 的 SimExchange 规则。
-5. 成交率惩罚限频是 Gate 特有风险，L1 风控的频率限制需支持"成交率"维度（M3 风控设计时补充）。
+5. 成交率惩罚限频是 Gate 特有风险，RK-L1 风控的频率限制需支持"成交率"维度（M3 风控设计时补充）。
 6. SBE 二进制行情（templateId 表见本地文档）列为 M7 后的延迟优化候选；先 JSON。

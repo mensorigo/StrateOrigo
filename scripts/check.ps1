@@ -141,14 +141,19 @@ Invoke-Step '文件行数 ≤ 400 (docs/04 F1)' {
     $limit = 400
     $warn = 250
     $bad = @(); $over = @()
-    $roots = @('crates', 'apps')
+    # F1 管的是"源文件"，Rust 与 Python 都算（此前只扫 *.rs，Python 侧形同豁免）。
+    # 排除构建产物与第三方依赖目录，否则 .venv / target 里的文件会被算成我们的。
+    $roots = @('crates', 'apps', 'python')
+    $skipDir = '\\(target|\.venv|venv|__pycache__|node_modules|\.git)\\'
     foreach ($root in $roots) {
         if (-not (Test-Path $root)) { continue }
-        Get-ChildItem $root -Recurse -Include *.rs | ForEach-Object {
-            $n = (Get-Content $_.FullName | Measure-Object -Line).Lines
-            if ($n -gt $limit) { $bad += "$($_.FullName): $n 行" }
-            elseif ($n -gt $warn) { $over += "$($_.FullName): $n 行" }
-        }
+        Get-ChildItem $root -Recurse -Include *.rs, *.py -File |
+            Where-Object { $_.FullName -notmatch $skipDir } |
+            ForEach-Object {
+                $n = (Get-Content $_.FullName | Measure-Object -Line).Lines
+                if ($n -gt $limit) { $bad += "$($_.FullName): $n 行" }
+                elseif ($n -gt $warn) { $over += "$($_.FullName): $n 行" }
+            }
     }
     if ($over) { Write-Host "超过 $warn 行（建议拆分）：`n  $($over -join "`n  ")" -ForegroundColor Yellow }
     if ($bad) { Write-Host "超过 $limit 行（CI 失败，docs/04 F1）：`n  $($bad -join "`n  ")" -ForegroundColor Red; exit 1 }
