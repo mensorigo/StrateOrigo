@@ -18,7 +18,7 @@ impl TelemetryError {
     /// 稳定英文错误码（docs/04 E2）：`<域前缀><变体>`，本域前缀 `Telemetry`。
     ///
     /// 所有错误类型都提供 `code()`，日志字段 `code` 直接取自它（docs/04 §3.6
-    /// L4）——调用点若拿不到码就只能拼字符串，日志无法按码聚合。
+    /// G4）——调用点若拿不到码就只能拼字符串，日志无法按码聚合。
     pub const fn code(&self) -> &'static str {
         match self {
             Self::Filter(_) => "TelemetryFilter",

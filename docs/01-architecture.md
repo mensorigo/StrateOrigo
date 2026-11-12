@@ -21,9 +21,9 @@
 
 | 延迟等级 | 典型持仓 | 适用市场 | 策略语言 | 回测保真度 |
 |---|---|---|---|---|
-| **HF**（高频） | 毫秒 ~ 秒 | 加密货币 | 仅 Rust | L2（订单簿 + 延迟 + 排队） |
-| **MF**（中频） | 秒 ~ 小时 | 加密货币、美股 | Rust，或 Python（≥100ms 决策周期） | L1（逐笔/Bar 事件驱动） |
-| **LF**（低频） | 天 ~ 周 | 加密货币、美股、A 股 | Rust / Python | L1 |
+| **HF**（高频） | 毫秒 ~ 秒 | 加密货币 | 仅 Rust | BT-L2（订单簿 + 延迟 + 排队） |
+| **MF**（中频） | 秒 ~ 小时 | 加密货币、美股 | Rust，或 Python（≥100ms 决策周期） | BT-L1（逐笔/Bar 事件驱动） |
+| **LF**（低频） | 天 ~ 周 | 加密货币、美股、A 股 | Rust / Python | BT-L1 |
 
 ## 2. 系统上下文
 
@@ -179,7 +179,7 @@ sequenceDiagram
 |---|---|---|
 | 内部 Tick-to-Trade p50 / p99 | ≤ 10µs / ≤ 50µs | 不含网络；VPS 有噪声邻居，p99.9 不承诺 |
 | 网络 RTT（VPS ↔ 撮合） | 1~3 ms 级 | 取决于机房选址，**必须实测** |
-| 回测吞吐（L2 事件） | ≥ 2M 事件/秒/核 | 用于大规模参数扫描 |
+| 回测吞吐（BT-L2 事件） | ≥ 2M 事件/秒/核 | 用于大规模参数扫描 |
 | 行情录制缺口率 | < 0.01% 时间 | 断线自动重连 + 快照重建 |
 | 进程崩溃 → 守护进程撤单 | ≤ 3 s | 心跳超时 + 交易所侧 Dead Man's Switch |
 
@@ -203,7 +203,7 @@ flowchart TB
     end
 
     subgraph BT["backtest"]
-        BTD["ReplayFeed<br/>历史 L2/逐笔回放"]
+        BTD["ReplayFeed<br/>历史 BK-L2/逐笔回放"]
         BTC["SimClock<br/>事件时间推进"]
         BTX["SimExchange<br/>撮合 + 延迟 + 排队 + 手续费"]
     end
@@ -321,37 +321,37 @@ stateDiagram-v2
 
 ```mermaid
 flowchart TB
-    INTENT["策略 OrderIntent"] --> L1
-    subgraph L1["L1 事前风控（内核线程内，同步，零分配，µs 级）"]
-        L1A["单笔数量/名义上限"]
-        L1B["价格带：偏离中间价 ≤ X bps"]
-        L1C["下单/撤单频率限制（交易所限额的 80%）"]
-        L1D["仓位/杠杆上限（含挂单）"]
-        L1E["自成交防护"]
-        L1F["策略状态：Halted / ReduceOnly"]
+    INTENT["策略 OrderIntent"] --> RKL1
+    subgraph RKL1["RK-L1 事前风控（内核线程内，同步，零分配，µs 级）"]
+        RKL1A["单笔数量/名义上限"]
+        RKL1B["价格带：偏离中间价 ≤ X bps"]
+        RKL1C["下单/撤单频率限制（交易所限额的 80%）"]
+        RKL1D["仓位/杠杆上限（含挂单）"]
+        RKL1E["自成交防护"]
+        RKL1F["策略状态：Halted / ReduceOnly"]
     end
-    L1 -->|通过| ORDER["发往交易所"]
-    L1 -->|拒绝| REJ["回调策略 on_reject"]
+    RKL1 -->|通过| ORDER["发往交易所"]
+    RKL1 -->|拒绝| REJ["回调策略 on_reject"]
 
-    subgraph L2["L2 组合风控（冷路径线程，毫秒级）"]
-        L2A["账户/策略日内亏损"]
-        L2B["最大回撤（峰值权益回撤）"]
-        L2C["总敞口、净敞口、相关性集中度"]
-        L2D["行情质量：断线 / 延迟 / 序列缺口"]
+    subgraph RKL2["RK-L2 组合风控（冷路径线程，毫秒级）"]
+        RKL2A["账户/策略日内亏损"]
+        RKL2B["最大回撤（峰值权益回撤）"]
+        RKL2C["总敞口、净敞口、相关性集中度"]
+        RKL2D["行情质量：断线 / 延迟 / 序列缺口"]
     end
-    L2 -->|"命令：ReduceOnly / Halt / CancelAll"| L1
+    RKL2 -->|"命令：ReduceOnly / Halt / CancelAll"| RKL1
 
-    subgraph L3["L3 守护进程 so-guardian（独立进程、独立 API Key）"]
-        L3A["心跳监测 so-trader"]
-        L3B["独立拉取账户权益/仓位"]
-        L3C["硬止损：权益跌破阈值"]
-        L3D["交易所侧 Dead Man's Switch"]
+    subgraph RKL3["RK-L3 守护进程 so-guardian（独立进程、独立 API Key）"]
+        RKL3A["心跳监测 so-trader"]
+        RKL3B["独立拉取账户权益/仓位"]
+        RKL3C["硬止损：权益跌破阈值"]
+        RKL3D["交易所侧 Dead Man's Switch"]
     end
-    L3 -->|"直接对交易所：撤单 / 平仓"| ORDER
-    L3 --> ALERT["告警"]
+    RKL3 -->|"直接对交易所：撤单 / 平仓"| ORDER
+    RKL3 --> ALERT["告警"]
 ```
 
-**原则**：L3 的阈值比 L2 宽，L2 比 L1 宽；正常情况下永远是 L1 先拦住。L3 动作即事故，必须写复盘。
+**原则**：`RK-L3` 的阈值比 `RK-L2` 宽，`RK-L2` 比 `RK-L1` 宽；正常情况下永远是 `RK-L1` 先拦住。`RK-L3` 动作即事故，必须写复盘。
 
 ## 11. 部署拓扑
 

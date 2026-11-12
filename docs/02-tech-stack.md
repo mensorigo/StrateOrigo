@@ -109,7 +109,7 @@
 ### 2.8 参考实现（只读参考，不作为依赖）
 | 项目 | 版本 | 参考价值 | 许可证注意 |
 |---|---|---|---|
-| hftbacktest | crate 0.9.4 / PyPI 2.4.4 | L2 回测的延迟与排队模型；**M3 回测内核阶段用作对照基准** | MIT，可借鉴 |
+| hftbacktest | crate 0.9.4 / PyPI 2.4.4 | BT-L2 回测的延迟与排队模型；**M3 回测内核阶段用作对照基准** | MIT，可借鉴 |
 | NautilusTrader | PyPI 1.231.0 / crate 0.67.0 | 领域模型、订单状态机、适配器结构 | **LGPL-3.0**，不得复制代码，只参考设计 |
 | barter | 0.14.0 | Rust 事件驱动交易框架设计 | MIT |
 
@@ -173,7 +173,7 @@
 | 告警 | Telegram Bot（主）/ ntfy（备） | 守护进程与 so-trader 双通道；Telegram 支持白名单用户的 `/status`、`/halt` 等受限命令 |
 | 内网 | WireGuard 或 Tailscale | 控制面唯一入口 |
 | 进程管理 | systemd | `Restart=on-failure`，交易进程**不自动重启**（见 04） |
-| 加密历史 L2 | Tardis.dev（付费） | 补齐录制开始之前的历史盘口 |
+| 加密历史 BK-L2 | Tardis.dev（付费） | 补齐录制开始之前的历史盘口 |
 | 加密公共历史 | OKX / Gate 官方历史数据下载 | 逐笔 / K 线等（以官网实际提供为准） |
 | 美股数据 | Databento / Polygon | 按需 |
 | A 股数据 | QMT 内置数据 / Tushare | 按需 |

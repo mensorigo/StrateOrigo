@@ -1,6 +1,6 @@
 # ADR-0015：编码风格、错误码与模块解耦的规范化
 
-- 状态：**已接受**（2026-11-11；第 1–8 项按现状固化并写入 docs/04，第 9 项由 [ADR-0016](ADR-0016-journal-crate-extraction.md) 落定为「新建 `so-journal`」并已实施）
+- 状态：**已接受**（2026-11-11；日志规则编号 `L1–L6` 已于 2026-11-12 改为 `G1–G6`，见 [ADR-0017](ADR-0017-rule-id-disambiguation.md)；第 1–8 项按现状固化并写入 docs/04，第 9 项由 [ADR-0016](ADR-0016-journal-crate-extraction.md) 落定为「新建 `so-journal`」并已实施）
 - 日期：2026-11-11
 - 触发：M0–M2 已落地 8 个 crate（so-core / so-model / so-telemetry / so-adapter-gate /
   so-book / so-recorder / so-data / so-py + apps/so-cli），但 docs/04 的规范只覆盖到
@@ -121,7 +121,7 @@ docs/04 E3 原文写"so-py 映射为具体 Python 异常类型"，与实现不�
 **M4 前**：在 `python/src/strateorigo/errors.py` 建立 `{code: ExceptionType}` 映射表，
 把前缀解析为具体异常，并与 Rust 侧错误码登记表同步维护（由测试断言两侧集合一致）。
 
-### 7. 实现方法（固化为新规则 I1–I13）与日志字段命名（L1–L6）
+### 7. 实现方法（固化为新规则 I1–I13）与日志字段命名（L1–L6，现为 G1–G6）
 
 见 docs/04 §3.4 / §3.6。要点：枚举表模式、newtype 受限构造、请求/统计结构体、
 编排层不做算法（算法层不做 I/O）、宏做编译期注册、trait 只作端口、
@@ -163,7 +163,7 @@ docs/04 E3 原文写"so-py 映射为具体 Python 异常类型"，与实现不�
 
 - `docs/04`：新增 §0 速查；§3.1 补"静默丢弃视为 bug"；§3.3 扩充为 E1–E9 并内嵌
   错误码登记表与 Python 映射表；新增 §3.4（I1–I13）、§3.5（A1–A7，含层级表与例外表）、
-  §3.6（L1–L6）；§5 加子编号（修好悬空的 §5.3 引用）；S10 补 `[REC]` 与 `mode = recorder`。
+  §3.6（L1–L6，2026-11-12 改为 G1–G6）；§5 加子编号（修好悬空的 §5.3 引用）；S10 补 `[REC]` 与 `mode = recorder`。
 - `docs/03`：§1 仓库树与代码对齐并标层级、依赖图加分组；§10 改为模块职责表并更正模块名；
   §18.3 补事件字段命名规则。
 - `docs/06` §9.1、`docs/07` §8、`docs/README.md`、`docs/pending-items.md`、`CLAUDE.md` 同步。

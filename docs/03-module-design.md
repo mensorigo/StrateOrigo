@@ -3,8 +3,8 @@
 ## 1. 仓库结构
 
 > `层0`–`层5` 是 **crate 依赖层级**，规则见 [04 §3.5](04-dev-constraints.md)。
-> 它们与各领域内部的级别编号无关：风控的 L1/L2/L3（[§7](#7-so-risk风控)）、
-> 订单簿的 L1/L2 深度、回测保真度的 L0/L1/L2（[§8](#8-so-backtest回测)）是各自领域的编号。
+> 它们与各领域内部的级别编号无关；领域级别一律带领域前缀（`RK-L*` 风控、`BK-L*` 订单簿、
+> `BT-L*` 回测保真度），见 [ADR-0017](decisions/ADR-0017-rule-id-disambiguation.md)。
 > **下表与实际目录一致**；新增 crate 须在本表与 04 §3.5 层级表中登记——
 > `scripts/check-deps.ps1` 直接解析 04 §3.5 的表格，**不另存一份期望表**，
 > 所以漏登记会让机检失败，而不会出现"两份表各自漂移"。
@@ -22,7 +22,7 @@ StrateOrigo/
 │  ├─ so-telemetry/            # 层1 tracing/metrics/延迟直方图
 │  ├─ so-adapter-gate/         # 层2 Gate 纯解析适配器（热路径、无网络；连接层在 so-recorder）
 │  ├─ so-journal/              # 层2 Raw Journal 帧格式、读写、sha256 校验、A/B 去重（ADR-0016）
-│  ├─ so-book/                 # 层2 订单簿（L1/L2 深度视图，数组实现，零分配）
+│  ├─ so-book/                 # 层2 订单簿（BK-L1/BK-L2 深度视图，数组实现，零分配）
 │  ├─ so-strategy/             # 层2 Strategy trait、Ctx、OrderIntent、决策管线组件 trait、编译期注册表
 │  ├─ so-signal/               # 层2 可复用的在线特征 / 信号计算（与 Python 特征库逐值对齐）
 │  ├─ so-exec/                 # 层2 执行算法：Maker 挂单管理、TWAP、冰山、跨所对冲腿
@@ -360,7 +360,7 @@ stateDiagram-v2
 
 **四级规则 × 三个执行位置**：规则按"管什么"分四级，按"在哪里执行"落到三个位置。
 
-| 规则级别 | 内容 | L1 事前（内核内，µs） | L2 组合（冷路径线程，ms） | L3 守护进程（独立进程） |
+| 规则级别 | 内容 | `RK-L1` 事前（内核内，µs） | `RK-L2` 组合（冷路径线程，ms） | `RK-L3` 守护进程（独立进程） |
 |---|---|---|---|---|
 | **订单级** | 单笔金额/数量、价格偏离、订单频率、自成交 | ● | | |
 | **策略级** | 最大仓位、策略回撤、日内亏损、连续亏损、库存上限 | ●（仓位、状态门） | ●（回撤、亏损） | |
@@ -369,7 +369,7 @@ stateDiagram-v2
 
 **任何策略都不能绕过风控**：策略只能通过 `Ctx::submit` 下单，`Ctx` 不暴露执行端；这一点由 crate 依赖规则（§1）在编译期保证。
 
-**L1 事前风控**（`fn check(&mut self, intent: &OrderIntent, state: &RiskState) -> Result<(), RiskReject>`）：
+**`RK-L1` 事前风控**（`fn check(&mut self, intent: &OrderIntent, state: &RiskState) -> Result<(), RiskReject>`）：
 
 | 检查项 | 说明 |
 |---|---|
@@ -382,9 +382,9 @@ stateDiagram-v2
 | 状态门 | 品种/策略/全局处于 `Halted`、`ReduceOnly` 时拒绝开仓 |
 | 行情新鲜度 | 最近行情距今 > 阈值 ⇒ 拒绝新开仓 |
 
-**L2 组合风控**（冷路径线程，每 N 毫秒或每笔成交后计算）：日内亏损、最大回撤、总/净敞口、按策略资金预算、相关性集中度、行情质量。触发 ⇒ 下发 `ControlEvent::{ReduceOnly, Halt, CancelAll}`。
+**`RK-L2` 组合风控**（冷路径线程，每 N 毫秒或每笔成交后计算）：日内亏损、最大回撤、总/净敞口、按策略资金预算、相关性集中度、行情质量。触发 ⇒ 下发 `ControlEvent::{ReduceOnly, Halt, CancelAll}`。
 
-**L3 so-guardian**（独立进程）：
+**`RK-L3` so-guardian**（独立进程）：
 - 独立 API Key（**只开读取 + 交易权限，禁止提现**，绑定 VPS IP 白名单）。
 - 每 1s 读 `so-trader` 心跳（本地 Unix socket / 共享内存），超时 3s ⇒ 撤销全部挂单 + 告警；权益跌破硬阈值 ⇒ 平仓 + 告警。
 - 同时启用交易所侧 **Dead Man's Switch**（如 OKX 的 cancel-all-after、Gate 的 countdown cancel all；**接入前以各所最新文档为准**），由 `so-trader` 定期续期。
@@ -395,9 +395,9 @@ stateDiagram-v2
 ### 8.1 保真度分级
 | 级别 | 实现 | 用途 | 能否作为晋级依据 |
 |---|---|---|---|
-| L0 | Python 向量化（Polars/numba/vectorbt） | 想法快速初筛 | ❌ |
-| L1 | Rust 事件驱动，Bar / 逐笔成交撮合 | MF / LF 策略 | ✅（MF/LF） |
-| L2 | Rust 事件驱动，L2 订单簿 + 延迟 + 排队 | HF 策略 | ✅（HF 必须） |
+| `BT-L0` | Python 向量化（Polars/numba/vectorbt） | 想法快速初筛 | ❌ |
+| `BT-L1` | Rust 事件驱动，Bar / 逐笔成交撮合 | MF / LF 策略 | ✅（MF/LF） |
+| `BT-L2` | Rust 事件驱动，`BK-L2` 订单簿 + 延迟 + 排队 | HF 策略 | ✅（HF 必须） |
 
 ### 8.2 SimExchange 模型
 - **延迟模型**：行情延迟（交易所 → 本地）、下单延迟（本地 → 交易所）、回报延迟。来源：实盘/模拟盘测得的经验分布（按时段），默认常数 + 抖动。
@@ -449,7 +449,7 @@ report = validation.full_report(study)   # PBO、DSR、SPA、成本敏感性、�
 | Backtest → Validation | 样本外 Sharpe > 1.5（HF 按日收益计）、交易数 ≥ 1000（HF） / 200（MF） |
 | Validation → Paper | PBO < 0.3；DSR 显著（p < 0.05）；成本敏感性测试仍盈利；参数邻域稳定 |
 | Paper → LiveSmall | ≥14 天；模拟盘与同期回放回测 PnL 偏差 < 20%，成交率偏差 < 15% |
-| LiveSmall → LiveScaled | ≥30 天；实盘与同期回放回测偏差在阈值内；未触发 L2 以上风控 |
+| LiveSmall → LiveScaled | ≥30 天；实盘与同期回放回测偏差在阈值内；未触发 `RK-L2` 以上风控 |
 | 任何状态 → Retired | 滚动 30 天 Sharpe 低于阈值，或偏差持续超阈值 |
 
 ### 9.4 实验追踪（自研实验库，无 Web UI）
@@ -664,7 +664,7 @@ flowchart LR
 
 - **VPS 上一律 JSON Lines**，便于 `jq` 和程序过滤；本地 `so-cli` 输出人类可读的彩色文本。
 - 每条记录的固定字段（顺序固定，事件字段不得覆盖；撞名时自动加 `field.` 前缀）：`ts`（UTC，纳秒，RFC 3339）、`level`、`instance`、`mode`、`venue`、`account`、`strategy`、`target`（模块路径）、`msg`；有关联时附带 `event_seq` / `decision_id` / `coid`，可以和审计库、决策日志对上。
-- **事件字段命名规则**见 [04 §3.6 L5](04-dev-constraints.md)：`snake_case`，时间带 `_ts` 后缀且单位写进名字，错误码字段固定叫 `code`，异常详情固定叫 `error`。**记录错误必须带 `code`**（04 L4）。
+- **事件字段命名规则**见 [04 §3.6 G5](04-dev-constraints.md)：`snake_case`，时间带 `_ts` 后缀且单位写进名字，错误码字段固定叫 `code`，异常详情固定叫 `error`。**记录错误必须带 `code`**（04 G4）。
 - 时间：一律 UTC 墙钟时间；回测中另加 `sim_ts`（模拟时间）。
 
 ### 18.4 级别约定

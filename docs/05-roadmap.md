@@ -60,7 +60,7 @@ gantt
 
 **交付物**
 - `so-data::normalize`：Raw → 统一 Parquet 表（06 §4.1），`instrument` 时点元数据。
-- `so-book`：L2 订单簿 + 序列号校验 + 快照重建（与实盘共用）。
+- `so-book`：`BK-L2` 订单簿 + 序列号校验 + 快照重建（与实盘共用）。
 - `so-data::clean`：清洗规则 C1~C13、`flags` 位图、`quality_intervals`、质量评级。
 - 每日质量报告（Markdown）+ Telegram 摘要。
 - 数据集清单与哈希；`so-cli data normalize / check / ls`。
@@ -76,7 +76,7 @@ gantt
 ## M3 · 回测内核（约 6 周）
 
 **交付物**
-- `so-model`、`so-strategy`（Strategy trait、Ctx、注册宏）、`so-risk`（L1）、`so-oms`（状态机）、`so-engine`（确定性事件循环）。
+- `so-model`、`so-strategy`（Strategy trait、Ctx、注册宏）、`so-risk`（`RK-L1`）、`so-oms`（状态机）、`so-engine`（确定性事件循环）。
 - `so-backtest`：多表归并 ReplayFeed、SimClock、SimExchange（延迟、排队、费用、资金费）。
 - 策略 S1 `st-mm-basic`；markout 与盈亏分解统计；决策管线组件 trait（Signal / Gate / Sizer / ExecPolicy）与决策日志；`so-signal`、`so-exec` 首批算法。
 - 实验库（SQLite + Parquet）+ `so-lab` 只读访问库；`so-cli bt run`、`so-cli exp list/show/compare`；报告为 Markdown + PNG。
@@ -86,7 +86,7 @@ gantt
 - [ ] 确定性：同一回测运行 10 次结果逐位一致（insta 快照）。
 - [ ] OMS / 撮合性质测试：仓位守恒、资金守恒、状态迁移合法，各 ≥ 10,000 例。
 - [ ] 与 hftbacktest 对照：相同数据与模型设置下成交笔数偏差 < 5%，PnL 偏差可逐项解释。
-- [ ] 吞吐 ≥ 2M 事件/秒/核；一个月 BTCUSDT L2 数据回测在 10 分钟内完成。
+- [ ] 吞吐 ≥ 2M 事件/秒/核；一个月 BTCUSDT `BK-L2` 数据回测在 10 分钟内完成。
 - [ ] 内核 crate 无 tokio 依赖（`cargo tree` 检查）。
 
 ## M4 · 研究与验证 + 首批策略研究（约 5 周）
@@ -115,7 +115,7 @@ gantt
 - `so-trader` paper 模式：实时行情 + SimExchange；**多个虚拟账户**（`[[accounts]]`，每个账户一个策略，可开多个内核分片）；不加载任何密钥。
 - 运行模式与配置校验：`mode` 字段、按模式的配置加载器（04 S8/S9）、所有记录带 `mode` 与实例名。
 - 影子盘工具：同一策略的两个实例（如将来的实盘 + 模拟盘，或 v1 / v2 两个虚拟账户）同期结果对比报告。
-- L2 组合风控线程；gRPC 控制面：**03 §11 列出的 VPS 交易域接口全部实现**（含 K 线 `Market.GetBars/StreamBars`、指标、图表标记、决策日志），每个 RPC 有集成测试，由 `so-cli` 使用验证。M9 的客户端只消费这些接口。
+- `RK-L2` 组合风控线程；gRPC 控制面：**03 §11 列出的 VPS 交易域接口全部实现**（含 K 线 `Market.GetBars/StreamBars`、指标、图表标记、决策日志），每个 RPC 有集成测试，由 `so-cli` 使用验证。M9 的客户端只消费这些接口。
 - `so-cli watch`（ratatui 终端实时监控）、`so-cli trader status`。
 - 策略实例生命周期（创建 / 启动 / 暂停 / 恢复 / 只减仓 / 退出 / 熔断）与状态恢复；`so-portfolio` 账户内目标仓位缩放、币数上限与 BTC Beta 敞口（03 §14）。
 - 实盘输入日志 + `so-cli replay`（03 §17）；定时任务调度（03 §16）。

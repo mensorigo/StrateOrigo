@@ -22,7 +22,7 @@ StrateOrigo：Rust + Python 量化交易机器人。重心是**数据获取与�
 - **文件划分**（docs/04 F1–F7）：单文件 ≤ 400 行（超 250 行警告）；每个文件只负责一件事，开头写明职责；解析、计算、显示、I/O、配置、错误分文件；`lib.rs`/`mod.rs`/`__init__.py` 不写逻辑；函数 ≤ 60 行；不准用 `utils`/`helpers`/`common` 这类文件名。
 - **错误处理**（docs/04 E1–E9）：每域一个 thiserror 枚举；错误码 `<域前缀><变体>`（如 `DataJournal`、`GateFixed`），登记表在 docs/04 §3.3，**只增不改名**；上下文用命名字段不拼字符串；程序判别只匹配错误码、不匹配中文消息；gRPC/Python 映射只在 so-proto / so-py 边界做；热路径错误只返回或降级，不重试阻塞；退出码只用 0/1/2/3。
 - **实现方法**（docs/04 I1–I13）：枚举表模式（`ALL`/`as_str`/`from_str`）；受限构造（私有字段 + `new()` 校验）；请求结构体 + 统计结构体；内核内多态用枚举、边界才用 `dyn`；编排层不做算法、算法层不做 I/O。
-- **日志**（docs/04 L1–L6）：热路径写 `LogRecord` 到 SPSC，不调 `tracing` 宏；不按 tick 打 INFO；**记录错误必须带 `code` 字段**；字段 `snake_case`、时间带 `_ts`、耗时带 `_ns`。
+- **日志**（docs/04 G1–G6）：热路径写 `LogRecord` 到 SPSC，不调 `tracing` 宏；不按 tick 打 INFO；**记录错误必须带 `code` 字段**；字段 `snake_case`、时间带 `_ts`、耗时带 `_ns`。
 - 运行模式 `backtest` / `paper` / `demo` / `live` 共用同一内核，内核中不得出现按模式分支。**一个账户一个策略**；`live`/`demo` 启动时校验"每个交易所 1 个账户、共 1 个策略"；`backtest`/`paper` 不得加载任何密钥（ADR-0001、docs/04 S8–S11）。
 - 数据层：原始数据不可变；清洗只加标记不删原始数据；真实插针不得删除；回测只引用数据集哈希；**静默跳过或丢弃的数据视为 bug，必须计数并出现在日志与质量报告里**。
 - 不得修改 `configs/env/live*.toml`、`configs/risk/**`、密钥文件；不得连接实盘账户、部署 VPS、推送远程仓库（除非当次明确授权）。

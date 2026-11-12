@@ -18,13 +18,21 @@
 | # | 事项 | 依据 | 具体动作 |
 |---|------|------|----------|
 | 7 | ✅ 2026-11-11 `FixedError` 错误码加域前缀 | 04 E2 | `Overflow → FixedOverflow`、`DivisionByZero → FixedDivisionByZero`、`InvalidScale → FixedInvalidScale`、`InvalidStep → FixedInvalidStep`、`Parse → FixedParse`、`ExcessPrecision → FixedExcessPrecision`；同步 `crates/so-core/src/error.rs` 的 `code()`、`crates/so-py/src/version.rs` 的文档示例、04 §3.3 登记表 |
-| 8 | ✅ 2026-11-11 错误日志补 `code` 字段 | 04 L4 | 把只记 `error = %e` 的地方改为 `code = e.code()`：至少 `apps/so-cli/src/data_normalize.rs`（读配置失败、扫描目录失败）、`apps/so-cli/src/data_download.rs`（tokio 运行时创建失败）；改完全仓复查一遍 |
+| 8 | ✅ 2026-11-11 错误日志补 `code` 字段 | 04 G4（原 L4） | 把只记 `error = %e` 的地方改为 `code = e.code()`：至少 `apps/so-cli/src/data_normalize.rs`（读配置失败、扫描目录失败）、`apps/so-cli/src/data_download.rs`（tokio 运行时创建失败）；改完全仓复查一遍 |
 | 9 | ✅ 2026-11-11 依赖分层机检脚本 | 04 A7 | 新增 `scripts/check-deps.ps1`：读 `cargo metadata`，按 04 §3.5 层级表与例外表判定依赖边，出现表外边即非零退出；接入 `scripts/check.ps1` |
-| 10 | ✅ 2026-11-11 journal 归属下沉（`so-journal`） | [ADR-0016](decisions/ADR-0016-journal-crate-extraction.md) | 已建 `crates/so-journal`（层2：`JournalRow`、帧格式、读写、sha256、`Dedup`、`JournalError`）；`so-recorder` 与 `so-data` 各自依赖它，同层依赖已消除。`so-data` 生产依赖图 250 → 95 个 crate；Parquet 输出逐字节不变（聚合哈希 `94d1ffb0…`） |
+| 10 | ✅ 2026-11-11 journal 归属下沉（`so-journal`） | [ADR-0016](decisions/ADR-0016-journal-crate-extraction.md) | 已建 `crates/so-journal`（层2：`JournalRow`、帧格式、读写、sha256、`Dedup`、`JournalError`）；`so-recorder` 与 `so-data` 各自依赖它，同层依赖已消除。`so-data` 生产依赖图 204 → 95 个 crate；Parquet 输出逐字节不变（聚合哈希 `94d1ffb0…`） |
 | 11 | Python 异常映射落地 | 04 E3 | 新建 `python/src/strateorigo/errors.py`（`{code: ExceptionType}` 映射 + 前缀解析）；加测试断言映射表与 Rust 侧错误码登记表集合一致 |
-| 12 | ✅ 2026-11-11 `TelemetryError` 补 `code()` | 04 E2 | 登记表已登记 `TelemetryFilter` / `TelemetryFile` / `TelemetryInit`，代码尚未实现 `code()`；实现后 so-telemetry 的错误才能用于日志聚合（04 L4） |
+| 12 | ✅ 2026-11-11 `TelemetryError` 补 `code()` | 04 E2 | 登记表已登记 `TelemetryFilter` / `TelemetryFile` / `TelemetryInit`，代码尚未实现 `code()`；实现后 so-telemetry 的错误才能用于日志聚合（04 G4，原 L4） |
 
-### 2.1 本次整改中新发现、待处理
+### 2.1 编号去歧义（ADR-0017，2026-11-12 已完成）
+
+| # | 事项 | 依据 | 说明 |
+|---|------|------|------|
+| 16 | ✅ 2026-11-12 日志规则 `L1–L6` → `G1–G6` | [ADR-0017](decisions/ADR-0017-rule-id-disambiguation.md) | 规则编号里不再有 `L`；语义与编号值一一对应（`L4`→`G4` 仍是"错误日志必带 `code`"） |
+| 17 | ✅ 2026-11-12 领域级别加前缀 | 同上 | 风控 `RK-L1/L2/L3`、订单簿 `BK-L1/L2`、回测保真度 `BT-L0/L1/L2`；代码标识符（`book::L1` 视图类型）不变 |
+| 18 | ✅ 2026-11-12 mermaid 节点 ID 去规则化 | 同上（附带发现） | `docs/01 §10` 风控图子图 ID 改 `RKL1/2/3`；`docs/07` 两图节点 `L0/L12`→`VEC/EVT`、`G1/G2/G3`→`GATE1/2/3`——后者与新的 `G` 日志规则撞名 |
+
+### 2.2 本次整改中新发现、待处理
 
 | # | 事项 | 依据 | 说明 |
 |---|------|------|------|

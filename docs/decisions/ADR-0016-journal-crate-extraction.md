@@ -16,20 +16,24 @@ so-data ──依赖──> so-recorder        # 同层依赖（层3 → 层3）
 房地产业式的"共用格式定义"本应下沉，但当时格式定义与写入器一起被留在 `so-recorder`
 （一个带 `tokio` / `reqwest` / `tokio-tungstenite` 的**进程型** crate）。
 
-### 实测代价（2026-11-11，`cargo tree -p so-data -e normal`，唯一 crate 名去重）
+### 实测代价（2026-11-11）
+
+口径：`cargo tree -p so-data -e normal --prefix none | grep -E '^[a-zA-Z]' | sed 's/ v[0-9].*//' | sort -u | wc -l`
+（唯一 **crate 名**，不区分同一 crate 的多个版本；消除前的数字由 `git worktree add 75df20a` 实测得到，
+不是估算——初稿曾误写为 250，系早期用不同口径测得，2026-11-12 已按同一命令复测纠正。）
 
 | 指标 | 消除前 | 消除后 |
 |---|---|---|
-| `so-data` 生产依赖图的唯一 crate 数 | 250 | **95** |
-| 其中 `tokio` / `hyper` / `reqwest` / `tokio-tungstenite` / `rustls` 的数量 | 有（录制器的网络栈） | **0** |
+| `so-data` 生产依赖图的唯一 crate 数 | 204 | **95** |
+| 其中 `tokio` / `hyper` / `reqwest` / `tokio-tungstenite` / `rustls` 的行数 | 37 | **0** |
 | `so-data` 图上是否出现 `so-recorder` | 是 | 否 |
 
-即：数据层为了拿一个 60 行的 `JournalRow`，连整个 WebSocket 网络栈一起编译。
+即：数据层为了拿一个 `JournalRow`，连整个 WebSocket 网络栈（37 个依赖行）一起编译。
 而 `so-data` 的**生产代码**只用到 `JournalRow`（`JournalWriter` 仅出现在 `#[cfg(test)]`）。
 
 ### 为什么必须处理（而不是"忍一下"）
 
-1. **编译与依赖面**：改一行 `so-data` 要重编 250 个 crate 的依赖图；CI 时间与磁盘都是实测成本。
+1. **编译与依赖面**：改一行 `so-data` 要重编 204 个 crate 的依赖图；CI 时间与磁盘都是实测成本。
 2. **分层原则自相矛盾**：`so-data` 是纯数据变换（可离线、可在研究域跑），
    `so-recorder` 是长驻采集进程（连 VPS、连交易所）。让前者依赖后者，
    等于说"离线清洗数据需要网络栈"——这与 [04 §3.5 A1](04-dev-constraints.md) 的层号设计直接冲突。
@@ -68,7 +72,7 @@ so-data ──依赖──> so-recorder        # 同层依赖（层3 → 层3）
 ## 后果
 
 - **`so-data` 与 `so-recorder` 之间不再有依赖边**，04 §3.5 同层例外表回到空表。
-- `so-journal` 的提取让 `so-data` 的生产依赖图从 250 个 crate 降到 95 个（−62%）。
+- `so-journal` 的提取让 `so-data` 的生产依赖图从 204 个 crate 降到 95 个（−53%）。
 - `so-data` 的 Parquet 输出**逐字节不变**（41 个文件 sha256 全部一致，聚合哈希
   `94d1ffb0a772096d94b6f7f2b35bd242cd14a04bba30a0a16bb3a1d85ef38ea0` 前后相同）——
   证明这是纯粹的重构，没有语义改动。
@@ -81,5 +85,5 @@ so-data ──依赖──> so-recorder        # 同层依赖（层3 → 层3）
 1. **下沉到 `so-core`**：`so-core` 当时的生产依赖恰好只有 `thiserror`（编译期，零运行时代码）。
    Journal 需要 `zstd`/`serde_json`/`sha2`/`serde` 四个真实依赖，且属冷路径；
    把它们塞进**每个 crate 都要依赖**的层0，等于让热路径 crate 无条件背冷路径依赖（违反 A1/I13）。
-2. **保持现状并登记例外**：接受 250 个 crate 的构建代价与一条永久例外，
+2. **保持现状并登记例外**：接受 204 个 crate 的构建代价与一条永久例外，
    且掩盖"离线数据清洗依赖网络栈"这个架构信号。成本最低但把问题固化。

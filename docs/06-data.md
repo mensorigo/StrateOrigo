@@ -217,8 +217,8 @@ excluded_intervals = 42
 | 参数与回报 | 多次传入的参数收进 `<name>Request`，统计用 `<name>Stats` 返回，不用长参数列表 | I3 |
 | 计数而非静默 | 任何被跳过、丢弃、回退的数据都必须进 `Stats` 字段，并出现在日志与质量报告里 | §3.1 |
 | 原始数据 | 读取只读不改：尾帧截断、JSON 残缺、精度缺失一律"尽力恢复 + 计数"，**不修改也不重写原始文件** | §3、§5.1 |
-| 精度来源 | 唯一来源是当日 `rest.contracts` 快照（时点表）；缺失时回退默认值并**记 WARN 带 `code`** | §4.2、L4 |
+| 精度来源 | 唯一来源是当日 `rest.contracts` 快照（时点表）；缺失时回退默认值并**记 WARN 带 `code`** | §4.2、G4 |
 | 确定性 | 文件遍历顺序、行排序、去重顺序都显式固定；验收测试是"两次运行逐位一致" | D1、D3 |
 | 错误 | 只返回 `DataError` / `RecorderError` / `JournalError`；上下文用命名字段，不拼字符串；库代码不出现 `unwrap()` | E1–E7、E9 |
 | 格式归属 | Journal 的**文件格式与读写**只在 `so-journal`（层2）：读端与写端共用同一份换算与帧定义，不各自实现 | A1、I13、[ADR-0016](decisions/ADR-0016-journal-crate-extraction.md) |
-| 日志字段 | 与 03 §18.3、04 §3.6 L5 一致：`venue`、`symbol`、`channel`、`date`、`rows`、`files`、`code` | L5 |
+| 日志字段 | 与 03 §18.3、04 §3.6 G5 一致：`venue`、`symbol`、`channel`、`date`、`rows`、`files`、`code` | L5 |
