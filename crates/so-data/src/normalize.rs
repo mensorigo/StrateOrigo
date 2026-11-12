@@ -11,7 +11,7 @@ use std::collections::HashMap;
 
 use so_adapter_gate::{RawTrade, parse_bbo, parse_obu, parse_ticker, parse_trade};
 use so_core::{Scale, UnixNanos};
-use so_recorder::JournalRow;
+use so_journal::JournalRow;
 
 /// `book_delta` 表一行（docs/06 §4.1）。
 ///

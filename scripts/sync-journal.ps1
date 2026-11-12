@@ -1,4 +1,4 @@
-# Raw Journal 同步：VPS → 本地，逐文件 sha256 校验（docs/06 §3.2 A9、M1 交付物）。
+﻿# Raw Journal 同步：VPS → 本地，逐文件 sha256 校验（docs/06 §3.2 A9、M1 交付物）。
 #
 # 用法（本地 PowerShell）：
 #   powershell -ExecutionPolicy Bypass -File scripts/sync-journal.ps1 -Host <vps> [-User root] `

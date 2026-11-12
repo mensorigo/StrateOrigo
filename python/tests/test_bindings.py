@@ -10,9 +10,9 @@ def test_parse_price_exact() -> None:
     assert parse_price("65000.5", 1) == price_raw
     negative_raw = -5  # -0.05，精度 2
     assert parse_price("-0.05", 2) == negative_raw
-    with pytest.raises(ValueError, match="ExcessPrecision:"):
+    with pytest.raises(ValueError, match="FixedExcessPrecision:"):
         parse_price("1.234", 2)
-    with pytest.raises(ValueError, match="Parse:"):
+    with pytest.raises(ValueError, match="FixedParse:"):
         parse_price("1e5", 2)
 
 

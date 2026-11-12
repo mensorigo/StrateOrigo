@@ -26,14 +26,17 @@ pub enum FixedError {
 impl FixedError {
     /// 稳定的英文错误码，用于跨语言匹配（Python 异常、日志、审计）；
     /// `Display` 的中文消息只面向人，不作为程序判别依据。
+    ///
+    /// 形如 `<域前缀><变体>`（docs/04 E2），本域前缀为 `Fixed`。码只增不改名：
+    /// 改码会让已发布的 Python 用户代码静默失配（docs/04 §3.3 登记表）。
     pub const fn code(self) -> &'static str {
         match self {
-            Self::Overflow => "Overflow",
-            Self::DivisionByZero => "DivisionByZero",
-            Self::InvalidScale(_) => "InvalidScale",
-            Self::InvalidStep => "InvalidStep",
-            Self::Parse => "Parse",
-            Self::ExcessPrecision => "ExcessPrecision",
+            Self::Overflow => "FixedOverflow",
+            Self::DivisionByZero => "FixedDivisionByZero",
+            Self::InvalidScale(_) => "FixedInvalidScale",
+            Self::InvalidStep => "FixedInvalidStep",
+            Self::Parse => "FixedParse",
+            Self::ExcessPrecision => "FixedExcessPrecision",
         }
     }
 }

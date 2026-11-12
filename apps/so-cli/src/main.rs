@@ -5,6 +5,7 @@ mod data_download;
 mod data_ls;
 mod data_normalize;
 mod dispatch;
+mod exit;
 mod record;
 
 use std::process::ExitCode;
@@ -30,7 +31,7 @@ fn main() -> ExitCode {
             {
                 eprintln!("so-cli: {e}");
             }
-            return ExitCode::FAILURE;
+            return ExitCode::from(exit::EXIT_USAGE);
         }
     };
     dispatch::run(cli.command)

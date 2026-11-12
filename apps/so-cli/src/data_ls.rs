@@ -6,6 +6,8 @@
 use std::path::Path;
 use std::process::ExitCode;
 
+use crate::exit::EXIT_OK;
+
 use so_data::pipeline::list_parquet;
 
 /// Parquet 输出根目录。
@@ -35,7 +37,7 @@ pub fn run() -> ExitCode {
         datasets = manifests.len(),
         "data ls 完成"
     );
-    ExitCode::SUCCESS
+    ExitCode::from(EXIT_OK)
 }
 
 /// 列出目录下 `.toml` 文件（目录不存在 → 空）。

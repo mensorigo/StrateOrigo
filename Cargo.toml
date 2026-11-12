@@ -6,6 +6,7 @@ members = [
     "crates/so-telemetry",
     "crates/so-adapter-gate",
     "crates/so-book",
+    "crates/so-journal",
     "crates/so-recorder",
     "crates/so-data",
     "crates/so-py",
@@ -27,6 +28,7 @@ so-model = { path = "crates/so-model" }
 so-telemetry = { path = "crates/so-telemetry" }
 so-adapter-gate = { path = "crates/so-adapter-gate" }
 so-book = { path = "crates/so-book" }
+so-journal = { path = "crates/so-journal" }
 so-recorder = { path = "crates/so-recorder" }
 so-data = { path = "crates/so-data" }
 

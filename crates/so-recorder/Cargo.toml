@@ -15,6 +15,7 @@ so-model.workspace = true
 so-adapter-gate.workspace = true
 so-book.workspace = true
 so-telemetry.workspace = true
+so-journal.workspace = true
 thiserror.workspace = true
 
 # 异步运行时与 WS（冷路径，允许 tokio）

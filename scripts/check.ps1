@@ -125,6 +125,18 @@ Invoke-Step 'cargo nextest' {
     if ($have) { cargo nextest run }
     else { Write-Host 'cargo-nextest 未安装，退回 cargo test'; cargo test --workspace }
 }
+Invoke-Step '依赖分层 (docs/04 A1/A7)' {
+    foreach ($name in (Get-ChildItem scripts -Filter *.ps1).Name) {
+        # 脚本自身必须是 UTF-8 带 BOM：Windows PowerShell 5.1 无 BOM 时按 ANSI 读，
+        # 含中文的 .ps1 会解析失败或乱码（曾发生过）。
+        $bytes = [System.IO.File]::ReadAllBytes((Join-Path 'scripts' $name))
+        if ($bytes.Length -ge 3 -and -not ($bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF)) {
+            throw "scripts/$name 缺少 UTF-8 BOM（PowerShell 5.1 会按 ANSI 读取）"
+        }
+    }
+    powershell -ExecutionPolicy Bypass -File scripts/check-deps.ps1
+}
+
 Invoke-Step '文件行数 ≤ 400 (docs/04 F1)' {
     $limit = 400
     $warn = 250

@@ -2,19 +2,18 @@
 
 use std::process::ExitCode;
 
+use crate::exit::{EXIT_NOT_IMPLEMENTED, EXIT_OK};
+
 use so_core::RunMode;
 
 use crate::args::{Command, DataCommand};
-
-/// "尚未实现"的退出码，与参数错误（clap 用 2）区分。
-const EXIT_NOT_IMPLEMENTED: u8 = 3;
 
 /// 执行命令。
 pub fn run(command: Command) -> ExitCode {
     let milestone = match command {
         Command::Info => {
             print_info();
-            return ExitCode::SUCCESS;
+            return ExitCode::from(EXIT_OK);
         }
         Command::Record { config, venue } => return crate::record::run(&config, venue.as_deref()),
         Command::Data(DataCommand::Download {

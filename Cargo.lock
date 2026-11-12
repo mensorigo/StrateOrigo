@@ -2328,10 +2328,22 @@ dependencies = [
  "serde_json",
  "so-adapter-gate",
  "so-core",
+ "so-journal",
  "so-model",
- "so-recorder",
  "thiserror",
  "tracing",
+ "zstd 0.13.4",
+]
+
+[[package]]
+name = "so-journal"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sha2",
+ "so-core",
+ "thiserror",
  "zstd 0.13.4",
 ]
 
@@ -2365,6 +2377,7 @@ dependencies = [
  "so-adapter-gate",
  "so-book",
  "so-core",
+ "so-journal",
  "so-model",
  "so-telemetry",
  "thiserror",

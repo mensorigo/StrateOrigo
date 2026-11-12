@@ -1,5 +1,5 @@
 # 实盘环境配置示例（复制为 configs/env/live-okx-funding.toml 后使用）。
-# ⚠ 真实文件由人工创建与修改（docs/04 §5.3：Agent 不得改动 configs/env/live*.toml）。
+# ⚠ 真实文件由人工创建与修改（docs/04 §5.2：Agent 不得改动 configs/env/live*.toml）。
 # ADR-0001：live 模式强制"一个交易所一个账户 + 一个策略"；
 # 启动时校验不通过即拒绝启动（docs/04 S9）。
 

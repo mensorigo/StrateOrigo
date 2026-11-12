@@ -4,6 +4,7 @@
 
 use std::process::ExitCode;
 
+use crate::exit::{EXIT_FAILED, EXIT_OK, EXIT_USAGE};
 use so_recorder::{DownloadChannel, download_history};
 
 /// Gate REST 基址（docs/venues/gate.md §1）。
@@ -18,31 +19,35 @@ pub fn run_download(
     channel: &str,
 ) -> ExitCode {
     let Some(ch) = DownloadChannel::from_name(channel) else {
-        tracing::error!(channel, "未知频道（支持 trades | candles | funding）");
-        return ExitCode::FAILURE;
+        tracing::error!(
+            code = "CliUsage",
+            channel,
+            "未知频道（支持 trades | candles | funding）"
+        );
+        return ExitCode::from(EXIT_USAGE);
     };
     if venue != "gate-usdt" {
-        tracing::error!(venue, "当前只支持 gate-usdt（OKX 后置）");
-        return ExitCode::FAILURE;
+        tracing::error!(code = "CliUsage", venue, "当前只支持 gate-usdt（OKX 后置）");
+        return ExitCode::from(EXIT_USAGE);
     }
     let Some(from_secs) = parse_date_secs(from) else {
-        tracing::error!(from, "日期格式应为 YYYY-MM-DD");
-        return ExitCode::FAILURE;
+        tracing::error!(code = "CliUsage", from, "日期格式应为 YYYY-MM-DD");
+        return ExitCode::from(EXIT_USAGE);
     };
     // `to` 取该日结束（次日 00:00，作为不含上界的终点）；不填 = 到今天结束。
     let to_secs = match to {
         Some(t) => match parse_date_secs(t) {
             Some(s) => s.saturating_add(86_400),
             None => {
-                tracing::error!(to = t, "日期格式应为 YYYY-MM-DD");
-                return ExitCode::FAILURE;
+                tracing::error!(code = "CliUsage", to = t, "日期格式应为 YYYY-MM-DD");
+                return ExitCode::from(EXIT_USAGE);
             }
         },
         None => today_end_secs(),
     };
     if from_secs >= to_secs {
-        tracing::error!(from, to, "起始日期必须早于结束日期");
-        return ExitCode::FAILURE;
+        tracing::error!(code = "CliUsage", from, to, "起始日期必须早于结束日期");
+        return ExitCode::from(EXIT_USAGE);
     }
     tracing::info!(venue, symbol, channel, from, "开始历史下载");
     let rt = match tokio::runtime::Builder::new_multi_thread()
@@ -51,8 +56,8 @@ pub fn run_download(
     {
         Ok(rt) => rt,
         Err(e) => {
-            tracing::error!(error = %e, "创建 tokio 运行时失败");
-            return ExitCode::FAILURE;
+            tracing::error!(code = "CliRuntime", error = %e, "创建 tokio 运行时失败");
+            return ExitCode::from(EXIT_FAILED);
         }
     };
     match rt.block_on(download_history(
@@ -66,11 +71,11 @@ pub fn run_download(
     )) {
         Ok(out) => {
             tracing::info!(rows = out.rows, complete = out.complete, "下载完成");
-            ExitCode::SUCCESS
+            ExitCode::from(EXIT_OK)
         }
         Err(e) => {
             tracing::error!(code = e.code(), "下载失败（已下载部分保留，重跑续传）");
-            ExitCode::FAILURE
+            ExitCode::from(EXIT_FAILED)
         }
     }
 }

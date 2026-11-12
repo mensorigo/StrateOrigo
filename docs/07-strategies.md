@@ -201,8 +201,11 @@ stale_feed_ms = 500
 
 ## 8. 策略代码规范
 
-- 一个策略一个 crate（`crates/strategies/st-*`），只依赖 `so-strategy`。
-- 参数为强类型 `Config` 结构体，带默认值和取值范围校验。
+- 一个策略一个 crate（`crates/strategies/st-*`），**只依赖 `so-strategy`**（`so-signal`、`so-exec` 经其重新导出；见 [04 A3](04-dev-constraints.md)）。
+- 参数为强类型 `Config` 结构体，带默认值和取值范围校验（[04 I10](04-dev-constraints.md)），不用 `HashMap<String, Value>` 传参。
+- 决策管线组件（Signal / Gate / Sizer / ExecPolicy）各自一个文件（F2/F3）；内核内多态用枚举或泛型，不用 `dyn`（I4）。
+- 策略内部状态与信号计算属**热路径**，受 H1–H10 约束：不分配、不加锁、不 panic、价格数量用定点、时间只用 `ctx.now()`。
+- 错误只返回本域错误枚举（新建域须先在 [04 §3.3](04-dev-constraints.md) 登记码前缀），不 `unwrap()`；策略里的错误一律"降级或拒绝下单"，不得重试阻塞（E5）。
 - 必须包含：
   - 用人工构造事件序列的单元测试（例如"盘口失衡超过阈值时挂买单"）；
   - 一个固定数据集上的回测快照测试（结果变化必须解释）；

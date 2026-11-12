@@ -12,7 +12,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 
-use so_recorder::JournalRow;
+use so_journal::JournalRow;
 
 use crate::error::DataError;
 
@@ -144,7 +144,7 @@ pub fn valid_date(s: &str) -> bool {
 mod tests {
     use super::*;
     use so_core::UnixNanos;
-    use so_recorder::JournalWriter;
+    use so_journal::JournalWriter;
 
     /// 写一个含多帧（模拟重连追加）+ 截断尾帧的 Journal，验证流式读取。
     fn temp_dir(tag: &str) -> std::path::PathBuf {

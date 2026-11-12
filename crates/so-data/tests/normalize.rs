@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use so_core::Scale;
 use so_data::normalize::Normalizer;
 use so_data::parquet_out::write_all;
-use so_recorder::JournalRow;
+use so_journal::JournalRow;
 
 fn row(channel: &str, symbol: &str, raw: &str, ts_recv: i64) -> JournalRow {
     JournalRow {

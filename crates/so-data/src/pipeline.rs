@@ -6,8 +6,8 @@
 
 use std::path::{Path, PathBuf};
 
-use so_recorder::JournalRow;
-use so_recorder::dedup::{Dedup, dedup_key_from_frame};
+use so_journal::JournalRow;
+use so_journal::{Dedup, dedup_key_from_frame};
 
 use crate::contracts::parse_contract_snapshots;
 use crate::error::DataError;
@@ -138,7 +138,7 @@ fn collect_parquet(dir: &Path, out: &mut Vec<PathBuf>) {
 mod tests {
     use super::*;
     use so_core::UnixNanos;
-    use so_recorder::JournalWriter;
+    use so_journal::JournalWriter;
 
     const CONTRACTS: &str = r#"[{"name":"BTC_USDT","quanto_multiplier":"0.0001","order_price_round":"0.1","order_size_min":"1","order_size_max":"1000000","funding_rate":"0.002053","funding_interval":28800,"funding_next_apply":1610035200,"mark_price_round":"0.01","status":"trading","enable_decimal":false,"orders_limit":50}]"#;
 

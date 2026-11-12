@@ -27,7 +27,7 @@ fn run_mode_rules(mode: &str) -> PyResult<(bool, Option<u16>, u16)> {
 
 /// 精确解析十进制字符串为定点整数（不经过浮点）。
 ///
-/// 失败时抛出 `ValueError`，消息以稳定错误码开头（如 `Parse:`、`ExcessPrecision:`），
+/// 失败时抛出 `ValueError`，消息以稳定错误码开头（如 `FixedParse:`、`FixedExcessPrecision:`），
 /// 程序判别用错误码，不要匹配中文消息。
 #[pyfunction]
 fn parse_price(text: &str, decimals: u8) -> PyResult<i64> {

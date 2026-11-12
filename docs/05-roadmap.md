@@ -67,8 +67,8 @@ gantt
 - Python：`strateorigo.data.load(dataset_hash)` → Polars LazyFrame；Bar 生成（时间/成交量/成交额 Bar）；as-of join 工具。
 
 **验收**
-- [ ] 重建订单簿与 REST 快照比对，前 20 档一致率 ≥ 99.9%。
-- [ ] 从 Raw Journal 重新生成 Parquet，结果逐位一致（确定性）。
+- [x] 重建订单簿与 REST 快照比对，前 20 档一致率 ≥ 99.9%。（2026-11-11，`bookcheck`：f965aee + ea11fa2 修复真实数据回放发现的语义错误）
+- [x] 从 Raw Journal 重新生成 Parquet，结果逐位一致（确定性）。（2026-11-11，两次运行 sha256 一致：75df20a）
 - [ ] 每条清洗规则都有构造数据的单元测试（含"真实插针不被删除"测试）。
 - [ ] 未来函数检查：篡改 t 之后的数据，t 及之前的派生值不变。
 - [ ] 如有 Tardis 数据：与自录数据重叠时段的比对报告。

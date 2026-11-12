@@ -1,0 +1,23 @@
+[package]
+name = "so-journal"
+description = "Raw Journal 帧格式与读写：JSONL 行模型、zstd 多帧滚动写入、A/B 去重（docs/06 §3）。层级 层2"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# 冷路径叶子 crate（docs/04 A1/I13）：录制（so-recorder）与数据（so-data）共用，
+# 两者互不依赖。不引入网络/异步依赖——这是抽取本 crate 的目的（ADR-0016）。
+[dependencies]
+so-core.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+# 沿用 so-recorder 的版本基线（docs/02 §2.3）；两者未进 workspace.dependencies，
+# 本地声明与写入端保持同版本，避免解析出两份实现。
+sha2 = "0.10.9"
+zstd = "0.13.3"
+
+[lints]
+workspace = true

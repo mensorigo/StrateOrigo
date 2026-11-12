@@ -2,6 +2,13 @@
 
 ## 1. 仓库结构
 
+> `层0`–`层5` 是 **crate 依赖层级**，规则见 [04 §3.5](04-dev-constraints.md)。
+> 它们与各领域内部的级别编号无关：风控的 L1/L2/L3（[§7](#7-so-risk风控)）、
+> 订单簿的 L1/L2 深度、回测保真度的 L0/L1/L2（[§8](#8-so-backtest回测)）是各自领域的编号。
+> **下表与实际目录一致**；新增 crate 须在本表与 04 §3.5 层级表中登记——
+> `scripts/check-deps.ps1` 直接解析 04 §3.5 的表格，**不另存一份期望表**，
+> 所以漏登记会让机检失败，而不会出现"两份表各自漂移"。
+
 ```text
 StrateOrigo/
 ├─ Cargo.toml                  # 核心 workspace（不含桌面端）
@@ -10,39 +17,40 @@ StrateOrigo/
 ├─ deny.toml                   # cargo-deny 规则
 ├─ CLAUDE.md                   # Agent 协作规则（入口）
 ├─ crates/
-│  ├─ so-core/                 # 基础类型：UnixNanos、Price、Qty、ID、枚举、错误、Clock trait
-│  ├─ so-model/                # 领域模型：Instrument、Order、Fill、Position、Account、Event
-│  ├─ so-book/                 # L1/L2 订单簿（数组实现，零分配）
-│  ├─ so-strategy/             # Strategy trait、Ctx、OrderIntent、决策管线组件 trait、编译期注册表
-│  ├─ so-signal/               # 可复用的在线特征 / 信号计算（与 Python 特征库逐值对齐）
-│  ├─ so-exec/                 # 执行算法：Maker 挂单管理、TWAP、冰山、跨所对冲腿
-│  ├─ so-lab/                  # 本地研究域只读访问：实验库、数据集、报告（so-cli / 桌面端用）
-│  ├─ so-risk/                 # L1 事前风控 + L2 组合风控
-│  ├─ so-portfolio/            # 组合管理：资金分配、目标仓位合并、敞口与相关性
-│  ├─ so-oms/                  # 订单状态机、账户与持仓、对账
-│  ├─ so-engine/               # 确定性事件循环内核（三种模式共用）
-│  ├─ so-backtest/             # ReplayFeed、SimClock、SimExchange（撮合/延迟/排队/费用）
-│  ├─ so-data/                 # Raw Journal、规范化、Parquet 读写、数据校验、数据集哈希
-│  ├─ so-adapters/
-│  │  ├─ so-adapter-okx/       # 现货 + 永续 SWAP（行情 + 交易），首个接入
-│  │  ├─ so-adapter-gate/      # 现货 + USDT 永续（行情 + 交易）
-│  │  └─ so-adapter-ibkr/
-│  ├─ so-proto/                # 控制面 protobuf/gRPC（桌面端共用）
-│  ├─ so-telemetry/            # tracing/metrics/延迟直方图
-│  ├─ so-py/                   # PyO3 绑定 → Python 包 strateorigo._core
+│  ├─ so-core/                 # 层0 基础类型：UnixNanos、Price、Qty、ID、枚举、错误、Clock trait
+│  ├─ so-model/                # 层1 领域模型：Instrument、Order、Fill、Position、Account、Event
+│  ├─ so-telemetry/            # 层1 tracing/metrics/延迟直方图
+│  ├─ so-adapter-gate/         # 层2 Gate 纯解析适配器（热路径、无网络；连接层在 so-recorder）
+│  ├─ so-journal/              # 层2 Raw Journal 帧格式、读写、sha256 校验、A/B 去重（ADR-0016）
+│  ├─ so-book/                 # 层2 订单簿（L1/L2 深度视图，数组实现，零分配）
+│  ├─ so-strategy/             # 层2 Strategy trait、Ctx、OrderIntent、决策管线组件 trait、编译期注册表
+│  ├─ so-signal/               # 层2 可复用的在线特征 / 信号计算（与 Python 特征库逐值对齐）
+│  ├─ so-exec/                 # 层2 执行算法：Maker 挂单管理、TWAP、冰山、跨所对冲腿
+│  ├─ so-portfolio/            # 层2 组合管理：资金分配、目标仓位合并、敞口与相关性
+│  ├─ so-risk/                 # 层3 风控：事前（引擎内同步）+ 组合（引擎内实时）
+│  ├─ so-oms/                  # 层3 订单状态机、账户与持仓、对账
+│  ├─ so-engine/               # 层3 确定性事件循环内核（三种模式共用）
+│  ├─ so-backtest/             # 层3 ReplayFeed、SimClock、SimExchange（撮合/延迟/排队/费用）
+│  ├─ so-data/                 # 层3 规范化、Parquet 读写、清洗、数据校验、数据集哈希
+│  ├─ so-recorder/             # 层3 行情录制（WS/REST 采集、Journal 写入、静默检测、告警）；库 + 二进制
+│  ├─ so-lab/                  # 层4 本地研究域只读访问：实验库、数据集、报告（so-cli / 桌面端用）
+│  ├─ so-adapters/             # 层4 交易所接入（trait 定义在 so-strategy / so-model，实现在各 adapter）
+│  │  ├─ so-adapter-okx/       #      现货 + 永续 SWAP（行情 + 交易），首个接入
+│  │  └─ so-adapter-ibkr/      #  （Gate 的连接层在 so-recorder，纯解析在层2 的 so-adapter-gate）
+│  ├─ so-proto/                # 层4 控制面 protobuf/gRPC（桌面端共用）
+│  ├─ so-py/                   # 层1 PyO3 绑定 → Python 包 strateorigo._core
 │  └─ strategies/
 │     ├─ st-mm-basic/          # 示例：基础做市（M3 回测内核验收用）
 │     └─ st-.../
 ├─ apps/
-│  ├─ so-trader/               # 实盘/模拟盘主进程
-│  ├─ so-guardian/             # 独立风控守护进程
-│  ├─ so-recorder/             # 行情录制
-│  ├─ so-cli/                 # 主要操作入口：数据、回测、实验、部署、watch、Kill Switch
+│  ├─ so-trader/               # 层5 实盘/模拟盘主进程
+│  ├─ so-guardian/             # 层5 独立风控守护进程
+│  ├─ so-cli/                  # 层5 主要操作入口：数据、回测、实验、部署、watch、Kill Switch
 │  └─ so-desktop/              # P2，暂不创建（将来为独立 workspace，GPUI）
 ├─ python/
 │  ├─ pyproject.toml           # maturin 构建，包名 strateorigo
 │  ├─ uv.lock
-│  ├─ strateorigo/
+│  ├─ src/strateorigo/         # src 布局（不是 python/strateorigo/）
 │  │  ├─ data/                 # 数据加载、对齐
 │  │  ├─ features/             # 特征库
 │  │  ├─ backtest/             # 封装 Rust 回测
@@ -59,44 +67,75 @@ StrateOrigo/
 │  ├─ risk/                    # 风控限额（TOML）
 │  └─ env/                     # dev / paper / live 环境配置（不含密钥）
 ├─ deploy/                     # systemd unit、Ansible、VPS 初始化脚本
+├─ scripts/                    # check.ps1（一键检查）、check-deps.ps1（依赖分层机检，解析 04 §3.5）
 ├─ data/                       # ⚠ .gitignore：本地数据
 └─ docs/
 ```
 
-**依赖方向（只能自上而下）**
+**依赖方向（只能由高编号层指向低编号层；规则见 [04 §3.5](04-dev-constraints.md)）**
 
 ```mermaid
 flowchart TB
-    APPS["apps/*"] --> ENGINE["so-engine"]
-    APPS --> ADAPT["so-adapters/*"]
-    APPS --> TELE["so-telemetry"]
-    APPS --> PROTO["so-proto"]
-    PY["so-py"] --> BT["so-backtest"]
-    PY --> DATA
-    BT --> ENGINE
-    BT --> DATA["so-data"]
-    ENGINE --> STRAT["so-strategy"]
-    STRATS --> SIG["so-signal"]
-    STRATS --> EXEC["so-exec"]
-    SIG --> MODEL
-    EXEC --> STRAT
-    ENGINE --> RISK["so-risk"]
-    ENGINE --> PORT["so-portfolio"]
-    PORT --> MODEL
-    ENGINE --> OMS["so-oms"]
-    ENGINE --> BOOK["so-book"]
+    subgraph T5["层5 apps/*"]
+        APPS["so-cli / so-trader / so-guardian"]
+    end
+    subgraph T4["层4 边界"]
+        ADAPT["so-adapters/*"]
+        LAB["so-lab"]
+        PROTO["so-proto"]
+    end
+    subgraph T3["层3 引擎与数据"]
+        ENGINE["so-engine"]
+        BT["so-backtest"]
+        DATA["so-data"]
+        REC["so-recorder"]
+        RISK["so-risk"]
+        OMS["so-oms"]
+    end
+    subgraph T2["层2 领域组件"]
+        STRAT["so-strategy"]
+        STRATS["strategies/*"]
+        SIG["so-signal"]
+        EXEC["so-exec"]
+        PORT["so-portfolio"]
+        BOOK["so-book"]
+        JRN["so-journal"]
+        GATE["so-adapter-gate（纯解析）"]
+    end
+    subgraph T1["层1 模型与绑定"]
+        MODEL["so-model"]
+        TELE["so-telemetry"]
+        PY["so-py"]
+    end
+    CORE["层0 so-core"]
+    APPS --> ADAPT & LAB & PROTO & ENGINE & DATA & REC & TELE & PY
+    PY --> DATA & BT & CORE
     ADAPT --> MODEL
-    STRATS["strategies/*"] --> STRAT
-    STRAT --> MODEL["so-model"]
+    LAB --> DATA & BT
+    BT --> ENGINE & DATA
+    ENGINE --> STRAT & RISK & PORT & OMS & BOOK
+    REC --> JRN & BOOK & TELE & GATE
+    DATA --> JRN & GATE
+    BOOK --> CORE
+    JRN --> CORE
     RISK --> MODEL
     OMS --> MODEL
+    PORT --> MODEL
     BOOK --> MODEL
     DATA --> MODEL
-    MODEL --> CORE["so-core"]
+    STRATS --> STRAT & SIG & EXEC
+    SIG --> MODEL
+    EXEC --> STRAT
+    STRAT --> MODEL
+    MODEL --> CORE
+    TELE --> CORE
 ```
 
-- `so-engine` **不依赖** `so-adapters`、`tokio`、任何网络库。
-- 策略 crate **只能依赖** `so-strategy`、`so-signal`、`so-exec`（及其重新导出的类型），不能直接依赖 OMS、适配器。
+- `so-engine` **不依赖** `so-adapters`、`tokio`、任何网络库（A3）。
+- 策略 crate **只能依赖** `so-strategy`、`so-signal`、`so-exec`（及其重新导出的类型），不能直接依赖 OMS、适配器（A3）。
+- `so-data → so-recorder` 这条同层依赖已由下沉 `so-journal` 消除（[ADR-0016](decisions/ADR-0016-journal-crate-extraction.md)）；`so-recorder` 与 `so-data` 都只依赖 `so-journal`，两者互不依赖。
+- `so-adapter-gate` 是**纯解析**适配器（只依赖 `so-core` + `so-model`），因此在层2 而非层4；含连接/下单的适配器才进层4。
+
 
 ## 2. so-core：基础类型
 
@@ -418,14 +457,26 @@ report = validation.full_report(study)   # PBO、DSR、SPA、成本敏感性、�
 
 ## 10. so-data：数据
 
-> 完整的数据获取与清洗设计见 **[06-data.md](06-data.md)**。本节只列模块边界。
+> 完整的数据获取与清洗设计见 **[06-data.md](06-data.md)**（§9.1 是实现约定）。本节只列模块边界。
 
-- `so-data::journal`：Raw Journal 读写（rkyv/长度前缀帧 + zstd 分块，按小时滚动）。
-- `so-data::normalize`：各交易所原始消息 → 统一事件（`so-model::MarketEvent`），定点化。
-- `so-data::clean`：清洗规则引擎（序列号、时间戳、异常值、缺口标记），输出清洗报告。
-- `so-data::store`：Parquet 读写、分区布局、数据集哈希。
-- `so-data::download`：历史数据下载器（OKX / Gate 官方历史数据、Tardis 等），断点续传 + 校验和。
-- `so-data::calendar`：交易日历、交易所维护窗口。
+| 模块 | 职责 |
+|---|---|
+| `so-journal::writer` | Raw Journal **写入**（JSONL 帧 + zstd 多帧，按小时滚动 + sha256 边车） |
+| `so-journal::row` / `dedup` | Journal 行模型（`JournalRow`）与 A/B 双流去重键 |
+| `so-data::journal_in` | Raw Journal **读取**（流式 zstd 解码、尾帧截断容忍、`rest.contracts` 恢复） |
+| `so-data::contracts` | 合约快照 → 精度与时点 `instrument` 行 |
+| `so-data::normalize` | 各交易所原始消息 → 统一事件（`so-model::MarketEvent`），定点化 |
+| `so-data::parquet_out` / `instrument_out` | Parquet 落盘与 schema（分区布局、数据集哈希） |
+| `so-data::pipeline` | 按日编排：列出 Journal → 读取 → 归并去重 → 规范化 → 落盘 |
+| `so-data::clean` | 清洗规则引擎（C1–C13，见 06 §5），只加标记不删数据，输出清洗报告 |
+| `so-data::store` | 数据集清单与哈希（`data/datasets/<hash>.toml`） |
+| `so-data::download` | 历史数据下载器（OKX / Gate 官方历史数据、Tardis 等），断点续传 + 校验和 |
+| `so-data::calendar` | 交易日历、交易所维护窗口 |
+
+- 读与写共用的**文件格式**在 `so-journal`（层2）：写入端 `so-recorder` 与读取端 `so-data`
+  都只依赖它，两个 crate 之间**没有**依赖边（ADR-0016，由 `check-deps.ps1` 机检）。
+  `so-recorder` 仍重新导出 `so_journal::{JournalRow, JournalWriter, …}`，供既有调用点沿用。
+- 模块内部的分工遵循 [04 §3.4 I8/I9](04-dev-constraints.md)：**编排层不做算法，算法层不做 I/O**。
 
 ## 11. 控制面与客户端接口预留（so-proto）
 
@@ -612,7 +663,8 @@ flowchart LR
 ### 18.3 格式与字段
 
 - **VPS 上一律 JSON Lines**，便于 `jq` 和程序过滤；本地 `so-cli` 输出人类可读的彩色文本。
-- 每条记录的固定字段：`ts`（UTC，纳秒，RFC 3339）、`level`、`instance`、`mode`、`venue`、`account`、`strategy`、`target`（模块路径）、`msg`；有关联时附带 `event_seq` / `decision_id` / `coid`，可以和审计库、决策日志对上。
+- 每条记录的固定字段（顺序固定，事件字段不得覆盖；撞名时自动加 `field.` 前缀）：`ts`（UTC，纳秒，RFC 3339）、`level`、`instance`、`mode`、`venue`、`account`、`strategy`、`target`（模块路径）、`msg`；有关联时附带 `event_seq` / `decision_id` / `coid`，可以和审计库、决策日志对上。
+- **事件字段命名规则**见 [04 §3.6 L5](04-dev-constraints.md)：`snake_case`，时间带 `_ts` 后缀且单位写进名字，错误码字段固定叫 `code`，异常详情固定叫 `error`。**记录错误必须带 `code`**（04 L4）。
 - 时间：一律 UTC 墙钟时间；回测中另加 `sim_ts`（模拟时间）。
 
 ### 18.4 级别约定

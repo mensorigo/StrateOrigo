@@ -12,13 +12,13 @@ publish.workspace = true
 so-core.workspace = true
 so-model.workspace = true
 so-adapter-gate.workspace = true
-so-recorder.workspace = true
+so-journal.workspace = true
 thiserror.workspace = true
 serde_json.workspace = true
 serde.workspace = true
 tracing.workspace = true
 
-# Raw Journal 读取（与 so-recorder 写入端同版本 zstd）
+# Raw Journal 读取（与写入端共用 so-journal 的 zstd 版本）
 zstd = "0.13.3"
 
 # Parquet（docs/06 §4.1 统一表；zstd 压缩）

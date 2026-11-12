@@ -24,6 +24,7 @@ __pycache__/
 *$py.class
 .venv/
 venv/
+*.pdb                # maturin develop 生成的调试符号，不进仓库
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/

@@ -14,13 +14,10 @@ pub mod alert;
 pub mod bookcheck;
 pub mod config;
 pub mod connection;
-pub mod dedup;
 pub mod download;
 pub mod download_run;
 pub mod error;
 pub mod frame;
-pub mod hash;
-pub mod journal;
 pub mod run;
 pub mod silence;
 pub mod snapshot;
@@ -33,5 +30,23 @@ pub use config::RecordingConfig;
 pub use download::DownloadChannel;
 pub use download_run::download_history;
 pub use error::RecorderError;
-pub use journal::{JournalRow, JournalStats, JournalWriter};
+// Journal 行模型、写入器、去重、sha256、日期格式化都由 `so-journal` 提供
+// （层 L2 叶子 crate，ADR-0016）。这里重新导出，让本 crate 内的
+// `crate::journal::…` 调用点保持可读，且不重复实现文件格式。
+pub use so_journal::{JournalRow, JournalStats, JournalWriter, sha256_file};
+
+/// Journal 相关类型的兼容路径（crate 内调用点沿用 `crate::journal::X`）。
+pub mod journal {
+    pub use so_journal::{JournalRow, JournalStats, JournalWriter};
+}
+
+/// A/B 去重（crate 内调用点沿用 `crate::dedup::X`）。
+pub mod dedup {
+    pub use so_journal::{Dedup, DedupKey, dedup_key_from_frame};
+}
+
+/// 文件校验和（crate 内调用点沿用 `crate::hash::X`）。
+pub mod hash {
+    pub use so_journal::sha256_file;
+}
 pub use run::run_recorder;
