@@ -26,6 +26,15 @@ pub enum JournalError {
         source: std::io::Error,
     },
 
+    /// 读取 Journal 文件失败。
+    #[error("读取 Journal {path}：{source}")]
+    Read {
+        /// 文件路径。
+        path: String,
+        /// 底层 IO 错误。
+        source: std::io::Error,
+    },
+
     /// zstd 编解码失败。
     #[error("zstd {stage}：{source}")]
     Codec {
@@ -56,6 +65,20 @@ pub enum JournalError {
         /// 底层 IO 错误。
         source: std::io::Error,
     },
+
+    /// 边车哈希与文件实际内容不符（文件被截断、篡改或边车过期）。
+    ///
+    /// 与 `Checksum`（读边车本身失败）分开：两者的排查方向相反——
+    /// 前者查边车文件，后者查被校验的数据文件（docs/06 §3.2 A9）。
+    #[error("校验和不符 {path}：边车 {expected}，实际 {actual}")]
+    ChecksumMismatch {
+        /// 被校验的文件路径。
+        path: String,
+        /// 边车里记录的哈希。
+        expected: String,
+        /// 文件实际算出的哈希。
+        actual: String,
+    },
 }
 
 impl JournalError {
@@ -64,10 +87,12 @@ impl JournalError {
         match self {
             Self::Open { .. } => "JournalOpen",
             Self::Write { .. } => "JournalWrite",
+            Self::Read { .. } => "JournalRead",
             Self::Codec { .. } => "JournalCodec",
             Self::Row { .. } => "JournalRow",
             Self::NotRolled => "JournalNotRolled",
             Self::Checksum { .. } => "JournalChecksum",
+            Self::ChecksumMismatch { .. } => "JournalChecksumMismatch",
         }
     }
 }

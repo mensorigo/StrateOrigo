@@ -18,13 +18,22 @@ so-data ──依赖──> so-recorder        # 同层依赖（层3 → 层3）
 
 ### 实测代价（2026-11-11）
 
-口径：`cargo tree -p so-data -e normal --prefix none | grep -E '^[a-zA-Z]' | sed 's/ v[0-9].*//' | sort -u | wc -l`
-（唯一 **crate 名**，不区分同一 crate 的多个版本；消除前的数字由 `git worktree add 75df20a` 实测得到，
-不是估算——初稿曾误写为 250，系早期用不同口径测得，2026-11-12 已按同一命令复测纠正。）
+口径：`cargo tree -p so-data -e normal --prefix none --target <T> | grep -oE '^[a-zA-Z0-9_-]+ v' | sed 's/ v//' | sort -u | wc -l`
+（唯一 **crate 名**，不区分同一 crate 的多个版本；消除前的数字由 `git worktree add 75df20a` 实测得到，不是估算。）
+
+**必须写明目标平台**：依赖图是平台相关的，同一份代码两个平台差 3 个 crate
+（`iana-time-zone`、`libc` 只在 Linux；`windows-link` 只在 Windows）。
+
+| 目标平台 | 消除前 | 消除后 |
+|---|---|---|
+| `x86_64-unknown-linux-gnu`（VPS / CI） | 207 | **96** |
+| `x86_64-pc-windows-msvc`（本地开发） | 204 | **95** |
+
+初稿写 250（−62%）是早期用不同口径估的，已被上面两组实测取代。
 
 | 指标 | 消除前 | 消除后 |
 |---|---|---|
-| `so-data` 生产依赖图的唯一 crate 数 | 204 | **95** |
+| `so-data` 生产依赖图的唯一 crate 数（Windows） | 204 | **95** |
 | 其中 `tokio` / `hyper` / `reqwest` / `tokio-tungstenite` / `rustls` 的行数 | 37 | **0** |
 | `so-data` 图上是否出现 `so-recorder` | 是 | 否 |
 

@@ -31,7 +31,7 @@ pub use download::DownloadChannel;
 pub use download_run::download_history;
 pub use error::RecorderError;
 // Journal 行模型、写入器、去重、sha256、日期格式化都由 `so-journal` 提供
-// （层 L2 叶子 crate，ADR-0016）。这里重新导出，让本 crate 内的
+// （层2 叶子 crate，ADR-0016）。这里重新导出，让本 crate 内的
 // `crate::journal::…` 调用点保持可读，且不重复实现文件格式。
 pub use so_journal::{JournalRow, JournalStats, JournalWriter, sha256_file};
 

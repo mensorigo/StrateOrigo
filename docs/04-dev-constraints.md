@@ -105,7 +105,7 @@ Rust 的错误是值（`Result`），"统一"靠以下约定，而不是全局 t
 | 录制 | `so_recorder::RecorderError`（`so-recorder/src/error.rs`） | `Recorder*` | `RecorderConfig`、`RecorderWs`、`RecorderRest`、`RecorderParse`、`RecorderAlert`、`RecorderIo`（Journal 失败转发 `Journal*`，不折叠） |
 | 数据 | `so_data::DataError`（`so-data/src/error.rs`） | `Data*` | `DataJournal`、`DataParse`、`DataParquet`、`DataUsage` |
 | 遥测 | `so_telemetry::TelemetryError`（`so-telemetry/src/error.rs`） | `Telemetry*` | `TelemetryFilter`、`TelemetryFile`、`TelemetryInit` |
-| Journal | `so_journal::JournalError`（`so-journal/src/error.rs`） | `Journal*` | `JournalOpen`、`JournalWrite`、`JournalCodec`、`JournalRow`、`JournalNotRolled`、`JournalChecksum` |
+| Journal | `so_journal::JournalError`（`so-journal/src/error.rs`） | `Journal*` | `JournalOpen`、`JournalWrite`、`JournalRead`、`JournalCodec`、`JournalRow`、`JournalNotRolled`、`JournalChecksum`、`JournalChecksumMismatch` |
 | CLI 边界 | `so-cli` 的 `exit.rs`（`apps/so-cli/src/exit.rs`） | `Cli*` | `CliNotFound`、`CliPermissionDenied`、`CliAlreadyExists`、`CliInvalidInput`、`CliTimedOut`、`CliConnection`、`CliIo`、`CliUsage`、`CliNoData`、`CliRuntime`（标准库 `io::Error` 无 `code()`，在边界统一成 CLI 码） |
 | 尚未创建 | `so-engine` / `so-risk` / `so-oms` / `so-backtest` / `so-lab` / `so-proto` | `Engine*` / `Risk*` / `Oms*` / `Backtest*` / `Lab*` / `Proto*` | 建 crate 时在此登记 |
 

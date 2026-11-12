@@ -7,7 +7,7 @@
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use crate::exit::{EXIT_FAILED, EXIT_OK, io_code, log_io_error};
+use crate::exit::{CliCode, EXIT_FAILED, EXIT_OK, io_code, log_io_error};
 use so_data::pipeline::{NormalizeRequest, normalize_day};
 use so_recorder::RecordingConfig;
 
@@ -30,7 +30,7 @@ pub fn run(date: &str) -> ExitCode {
         }
     };
     if venues.is_empty() {
-        tracing::error!(code = "CliNoData", date, raw_dir = %raw_dir.display(), "该日期没有 Raw Journal");
+        tracing::error!(code = CliCode::NoData.as_str(), date, raw_dir = %raw_dir.display(), "该日期没有 Raw Journal");
         return ExitCode::from(EXIT_FAILED);
     }
     let out_root = Path::new(PARQUET_ROOT);

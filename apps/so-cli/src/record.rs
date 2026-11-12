@@ -2,7 +2,7 @@
 
 use std::process::ExitCode;
 
-use crate::exit::{EXIT_FAILED, EXIT_OK, EXIT_USAGE, io_code, log_io_error};
+use crate::exit::{CliCode, EXIT_FAILED, EXIT_OK, io_code, log_io_error};
 use so_recorder::{RecordingConfig, run_recorder};
 
 /// 执行 `record` 命令。
@@ -11,14 +11,16 @@ pub fn run(config_path: &str, venue_filter: Option<&str>) -> ExitCode {
         Ok(t) => t,
         Err(e) => {
             log_io_error(io_code(&e), "读取录制配置失败", &e);
-            return ExitCode::from(EXIT_USAGE);
+            // E8 的 2 专指 clap 报的参数错误，不可复用：配置文件是**运行期依赖**，
+            // 读不到属运行时失败（1）。原来这里是 ExitCode::FAILURE(1)，行为不变。
+            return ExitCode::from(EXIT_FAILED);
         }
     };
     let config = match RecordingConfig::parse(&text) {
         Ok(c) => c,
         Err(e) => {
             tracing::error!(path = config_path, code = e.code(), "解析录制配置失败");
-            return ExitCode::from(EXIT_USAGE);
+            return ExitCode::from(EXIT_FAILED);
         }
     };
     // 交易所过滤：--venue gate 只录制配置中该 venue 的部分。
@@ -32,7 +34,8 @@ pub fn run(config_path: &str, venue_filter: Option<&str>) -> ExitCode {
             filter = venue_filter.unwrap_or_default(),
             "没有匹配的交易所配置"
         );
-        return ExitCode::from(EXIT_USAGE);
+        // 同样不是 clap 的参数错误：--venue 的值本身合法，是配置里没有这个交易所。
+        return ExitCode::from(EXIT_FAILED);
     }
     tracing::info!(
         venues = venues
@@ -50,7 +53,7 @@ pub fn run(config_path: &str, venue_filter: Option<&str>) -> ExitCode {
     {
         Ok(rt) => rt,
         Err(e) => {
-            tracing::error!(code = "CliRuntime", error = %e, "创建 tokio 运行时失败");
+            tracing::error!(code = CliCode::Runtime.as_str(), error = %e, "创建 tokio 运行时失败");
             return ExitCode::from(EXIT_FAILED);
         }
     };

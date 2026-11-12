@@ -4,11 +4,67 @@
 
 use std::process::ExitCode;
 
-use crate::exit::{EXIT_FAILED, EXIT_OK, EXIT_USAGE};
+use crate::exit::{CliCode, EXIT_FAILED, EXIT_OK, EXIT_USAGE};
 use so_recorder::{DownloadChannel, download_history};
 
 /// Gate REST 基址（docs/venues/gate.md §1）。
 const GATE_REST: &str = "https://api.gateio.ws/api/v4";
+
+/// 校验通过的下载参数。
+struct DownloadArgs {
+    /// 频道。
+    channel: DownloadChannel,
+    /// 起始（含）。
+    from_secs: i64,
+    /// 结束（不含）。
+    to_secs: i64,
+}
+
+/// 校验用户输入并解析成参数（docs/04 E8：属于"参数错误"的都在这里报 2）。
+///
+/// 与 `run_download` 分开，既让编排函数回到 60 行以内（[04 F5](04-dev-constraints.md)），
+/// 也让"哪些情况算参数错"集中在一处、可被单独测。
+fn parse_args(
+    venue: &str,
+    from: &str,
+    to: Option<&str>,
+    channel: &str,
+) -> Result<DownloadArgs, u8> {
+    let usage = |fields: &str| {
+        tracing::error!(code = CliCode::Usage.as_str(), "{fields}");
+        EXIT_USAGE
+    };
+    let Some(channel) = DownloadChannel::from_name(channel) else {
+        tracing::error!(
+            code = CliCode::Usage.as_str(),
+            channel,
+            "未知频道（支持 trades | candles | funding）"
+        );
+        return Err(EXIT_USAGE);
+    };
+    if venue != "gate-usdt" {
+        return Err(usage("当前只支持 gate-usdt（OKX 后置）"));
+    }
+    let Some(from_secs) = parse_date_secs(from) else {
+        return Err(usage("起始日期格式应为 YYYY-MM-DD"));
+    };
+    // `to` 取该日结束（次日 00:00，作为不含上界的终点）；不填 = 到今天结束。
+    let to_secs = match to {
+        Some(t) => match parse_date_secs(t) {
+            Some(s) => s.saturating_add(86_400),
+            None => return Err(usage("结束日期格式应为 YYYY-MM-DD")),
+        },
+        None => today_end_secs(),
+    };
+    if from_secs >= to_secs {
+        return Err(usage("起始日期必须早于结束日期"));
+    }
+    Ok(DownloadArgs {
+        channel,
+        from_secs,
+        to_secs,
+    })
+}
 
 /// 执行 `data download`。
 pub fn run_download(
@@ -18,37 +74,15 @@ pub fn run_download(
     to: Option<&str>,
     channel: &str,
 ) -> ExitCode {
-    let Some(ch) = DownloadChannel::from_name(channel) else {
-        tracing::error!(
-            code = "CliUsage",
-            channel,
-            "未知频道（支持 trades | candles | funding）"
-        );
-        return ExitCode::from(EXIT_USAGE);
+    let args = match parse_args(venue, from, to, channel) {
+        Ok(a) => a,
+        Err(code) => return ExitCode::from(code),
     };
-    if venue != "gate-usdt" {
-        tracing::error!(code = "CliUsage", venue, "当前只支持 gate-usdt（OKX 后置）");
-        return ExitCode::from(EXIT_USAGE);
-    }
-    let Some(from_secs) = parse_date_secs(from) else {
-        tracing::error!(code = "CliUsage", from, "日期格式应为 YYYY-MM-DD");
-        return ExitCode::from(EXIT_USAGE);
-    };
-    // `to` 取该日结束（次日 00:00，作为不含上界的终点）；不填 = 到今天结束。
-    let to_secs = match to {
-        Some(t) => match parse_date_secs(t) {
-            Some(s) => s.saturating_add(86_400),
-            None => {
-                tracing::error!(code = "CliUsage", to = t, "日期格式应为 YYYY-MM-DD");
-                return ExitCode::from(EXIT_USAGE);
-            }
-        },
-        None => today_end_secs(),
-    };
-    if from_secs >= to_secs {
-        tracing::error!(code = "CliUsage", from, to, "起始日期必须早于结束日期");
-        return ExitCode::from(EXIT_USAGE);
-    }
+    let DownloadArgs {
+        channel: ch,
+        from_secs,
+        to_secs,
+    } = args;
     tracing::info!(venue, symbol, channel, from, "开始历史下载");
     let rt = match tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -56,7 +90,7 @@ pub fn run_download(
     {
         Ok(rt) => rt,
         Err(e) => {
-            tracing::error!(code = "CliRuntime", error = %e, "创建 tokio 运行时失败");
+            tracing::error!(code = CliCode::Runtime.as_str(), error = %e, "创建 tokio 运行时失败");
             return ExitCode::from(EXIT_FAILED);
         }
     };

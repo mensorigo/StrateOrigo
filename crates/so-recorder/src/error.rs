@@ -1,6 +1,6 @@
 //! so-recorder 错误类型（docs/04 E1/E2）。
 //!
-//! Journal 相关的失败来自 `so-journal`（层 L2），此处用 `#[from]` 转发，
+//! Journal 相关的失败来自 `so-journal`（层2），此处用 `#[from]` 转发，
 //! 保持本 crate 调用点的 `?` 写法不变（ADR-0016）。
 
 /// 录制错误。

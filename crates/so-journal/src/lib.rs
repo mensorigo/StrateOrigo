@@ -17,6 +17,6 @@ pub mod writer;
 pub use date::{format_utc_date, format_utc_time};
 pub use dedup::{Dedup, DedupKey, dedup_key_from_frame};
 pub use error::JournalError;
-pub use hash::sha256_file;
+pub use hash::{sha256_file, verify_sidecar};
 pub use row::JournalRow;
 pub use writer::{JournalStats, JournalWriter};
