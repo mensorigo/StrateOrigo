@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 
 use so_core::Scale;
+use so_data::clean::engine::{CleanCfg, clean_tables};
 use so_data::normalize::Normalizer;
 use so_data::parquet_out::write_all;
 use so_journal::JournalRow;
@@ -130,7 +131,8 @@ fn parquet_roundtrip_row_counts() {
     ));
     let dir = std::env::temp_dir().join("so-data-test-roundtrip");
     let _ = std::fs::remove_dir_all(&dir);
-    let written = write_all(&dir, &n.tables, &scales(), "2023-11-14").unwrap();
+    let cleaned = clean_tables(&n.tables, "gate", &CleanCfg::default());
+    let written = write_all(&dir, &cleaned, &scales(), "2023-11-14").unwrap();
     assert_eq!(written, 2);
     assert!(
         dir.join("book_delta")

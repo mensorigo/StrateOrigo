@@ -9,9 +9,12 @@ use std::path::{Path, PathBuf};
 use so_journal::JournalRow;
 use so_journal::{Dedup, dedup_key_from_frame};
 
+use crate::clean;
+use crate::clean::engine::CleanCfg;
 use crate::contracts::parse_contract_snapshots;
 use crate::error::DataError;
 use crate::instrument_out::write_instrument;
+use crate::intervals_out::write_intervals;
 use crate::journal_in::{journal_files, read_journal, valid_date};
 use crate::normalize::{Normalizer, is_data_channel};
 use crate::parquet_out::write_all;
@@ -38,8 +41,10 @@ pub struct NormalizeStats {
     pub contracts_failed: u64,
     /// `instrument` 时点行数。
     pub instrument_rows: u64,
-    /// 写出的事件行数（四张行情表合计）。
+    /// 写出的事件行数（四张行情表合计，清洗剔除后）。
     pub event_rows: u64,
+    /// 清洗统计（docs/06 §5.2 的规则计数）。
+    pub clean: clean::CleanStats,
 }
 
 /// normalize 输入参数。
@@ -104,9 +109,16 @@ pub fn normalize_day(req: &NormalizeRequest<'_>) -> Result<(NormalizeStats, Path
     stats.parse_failed = normalizer.parse_failed;
     stats.no_scale = normalizer.no_scale;
 
-    let out_dir = req.out_root.join(NORMALIZE_VERSION).join(req.venue);
-    let written = write_all(&out_dir, &normalizer.tables, &scales, req.date)?;
+    // 清洗阶段：normalize 后、写盘前。只加标记不删数据（C6 唯一例外，
+    // 非法值行剔除并计数——docs/06 §5.2）；区间表与统计一起产出。
+    let cleaned = clean::engine::clean_tables(&normalizer.tables, req.venue, &CleanCfg::default());
+    stats.clean = cleaned.stats;
+
+    let n_root = req.out_root.join(NORMALIZE_VERSION);
+    let out_dir = n_root.join(req.venue);
+    let written = write_all(&out_dir, &cleaned, &scales, req.date)?;
     write_instrument(&out_dir, &instrument_rows, req.date)?;
+    write_intervals(&n_root, req.venue, req.date, &cleaned.intervals)?;
     stats.event_rows = u64::try_from(written).unwrap_or(u64::MAX);
     Ok((stats, out_dir))
 }
@@ -180,7 +192,7 @@ mod tests {
         assert_eq!(s1.event_rows, 1);
         assert_eq!(s1.instrument_rows, 1);
         let files = list_parquet(&root.join("parquet"));
-        assert_eq!(files.len(), 2); // book_delta + instrument
+        assert_eq!(files.len(), 3); // book_delta + instrument + quality_intervals
         let bytes1 = std::fs::read(&files[0]).unwrap();
         let _ = normalize_day(&req).unwrap();
         let bytes2 = std::fs::read(&files[0]).unwrap();

@@ -129,6 +129,7 @@ flowchart LR
 - **清洗只加标记，不删原始数据**。清洗输出 = 规范化数据 + 标记列（`flags` 位图）+ 质量区间表 `quality_intervals`。
 - 只有"确定是错误"的数据才会在派生数据集中被剔除；**真实的极端行情（闪崩、插针）不删除**，只标记，否则回测会低估尾部风险。
 - 清洗规则版本号 `clean_version`，计入数据集哈希。
+- `flags` 直接加列为四张行情表的最后一列（UInt32 位图，2026-11-12 拍板），不另建 `clean/` 目录；位语义只增不改。
 
 ### 5.2 清洗规则
 
@@ -158,7 +159,7 @@ flowchart LR
 | B | 覆盖率 ≥ 99.9%，缺口已全部标记 | 可用于 MF/LF；HF 回测时自动跳过缺口区间 |
 | C | 其他 | 默认禁止用于回测，需显式 `--allow-grade C` |
 
-每日生成质量报告 `data/quality/YYYY-MM-DD.md`，汇总异常并通过 Telegram 推送摘要。
+每日生成质量报告 `data/quality/YYYY-MM-DD.md`，汇总异常；Telegram 摘要推送延后到最终整体验证阶段（2026-11-13 拍板）。`so-cli data check --date` 读回当日 Parquet 的 `flags` 列与 `quality_intervals` 表完成评级。
 
 ## 6. 存储布局
 
@@ -166,9 +167,9 @@ flowchart LR
 data/
 ├─ raw/{venue}/{YYYY-MM-DD}/{HH}.{conn}.journal.zst   # 原始帧（不可变）+ .sha256
 ├─ vendor/{tardis|okx-hist|gate-hist|...}/...          # 第三方原始文件（不可变）+ 来源记录
-├─ parquet/{normalize_version}/{venue}/{table}/{symbol}/{YYYY-MM-DD}.parquet
-├─ clean/{clean_version}/{venue}/{table}/{symbol}/{YYYY-MM-DD}.parquet   # 含 flags 列
-├─ quality/{clean_version}/quality.parquet + YYYY-MM-DD.md
+├─ parquet/{normalize_version}/{venue}/{table}/{symbol}/{YYYY-MM-DD}.parquet   # 数据表含 flags 列
+├─ parquet/{normalize_version}/quality_intervals/{venue}/{YYYY-MM-DD}.parquet # 区间级异常
+├─ quality/{YYYY-MM-DD}.md                                 # 每日质量报告（data check 产出）
 ├─ meta/instruments.parquet                             # 时点元数据
 ├─ datasets/{dataset_hash}.toml                         # 数据集清单（不可变）
 └─ experiments.db + experiments/{run_id}/

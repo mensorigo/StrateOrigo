@@ -2,7 +2,9 @@
 //!
 //! `out_dir` 由调用方预先拼好版本与交易所段（`{root}/{n版本}/{venue}`），
 //! 本模块落 `{out_dir}/{table}/{symbol}/{YYYY-MM-DD}.parquet`，zstd 压缩，
-//! 按 `ts_recv` 排序。列与 [`crate::normalize`] 行体一一对应。
+//! 按 `ts_recv` 排序。列与 [`crate::normalize`] 行体一一对应，外加
+//! 清洗标记列 `flags`（[`crate::clean::CFlags`] 位图；docs/06 §5.1）。
+//! 区间级异常另见 [`crate::intervals_out`]。
 //!
 //! 精度说明：适配器解析 API 是单 scale，价格与数量都按品种 tick 精度
 //! 解析存储，因此文件元数据 `price_scale` 与 `qty_scale` 同值——元数据
@@ -15,12 +17,14 @@ use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 
-use arrow::array::{ArrayRef, Int64Array, StringArray, UInt64Array};
+use arrow::array::{ArrayRef, Int64Array, StringArray, UInt32Array, UInt64Array};
 use arrow::datatypes::{DataType, Field, Schema};
 use arrow::record_batch::RecordBatch;
 use parquet::arrow::ArrowWriter;
 use parquet::basic::Compression;
 
+use crate::clean::CFlags;
+use crate::clean::engine::CleanedTables;
 use crate::error::DataError;
 use crate::normalize::{BboRow, BookDeltaRow, MarkPriceRow, TradeRow};
 
@@ -28,6 +32,11 @@ use crate::normalize::{BboRow, BookDeltaRow, MarkPriceRow, TradeRow};
 pub const META_PRICE_SCALE: &str = "price_scale";
 /// Parquet 文件元数据键：数量精度。
 pub const META_QTY_SCALE: &str = "qty_scale";
+
+/// 清洗标记列（各表 schema 共用的最后一列）。
+fn flags_field() -> Field {
+    Field::new("flags", DataType::UInt32, false)
+}
 
 /// book_delta 表 schema（docs/06 §4.1）。
 pub fn book_delta_schema() -> Arc<Schema> {
@@ -41,14 +50,15 @@ pub fn book_delta_schema() -> Arc<Schema> {
         Field::new("price", DataType::Int64, false),
         Field::new("qty", DataType::Int64, false),
         Field::new("conn_id", DataType::Utf8, false),
+        flags_field(),
     ]))
 }
 
-/// 写 book_delta 行组（单品种单文件）。
+/// 写 book_delta 行组（单品种单文件；行与标记成对传入）。
 pub fn write_book_delta(
     out_dir: &Path,
     symbol: &str,
-    rows: &[BookDeltaRow],
+    rows: &[(BookDeltaRow, CFlags)],
     date: &str,
     price_scale: u8,
     qty_scale: u8,
@@ -59,31 +69,38 @@ pub fn write_book_delta(
     }
     let schema = book_delta_schema();
     // 按 ts_recv 排序（docs/06 §6），同刻保序（稳定排序保证确定性）。
-    let mut sorted: Vec<&BookDeltaRow> = rows.iter().collect();
-    sorted.sort_by_key(|r| (r.ts_recv, r.ts_exch));
+    let mut sorted: Vec<&(BookDeltaRow, CFlags)> = rows.iter().collect();
+    sorted.sort_by_key(|(r, _)| (r.ts_recv, r.ts_exch));
     let cols: Vec<ArrayRef> = vec![
         Arc::new(Int64Array::from_iter_values(
-            sorted.iter().map(|r| r.ts_exch),
+            sorted.iter().map(|(r, _)| r.ts_exch),
         )),
         Arc::new(Int64Array::from_iter_values(
-            sorted.iter().map(|r| r.ts_recv),
+            sorted.iter().map(|(r, _)| r.ts_recv),
         )),
         Arc::new(UInt64Array::from_iter_values(
-            sorted.iter().map(|r| r.seq_first),
+            sorted.iter().map(|(r, _)| r.seq_first),
         )),
         Arc::new(UInt64Array::from_iter_values(
-            sorted.iter().map(|r| r.seq_last),
+            sorted.iter().map(|(r, _)| r.seq_last),
         )),
         Arc::new(UInt64Array::from_iter_values(
-            sorted.iter().map(|r| r.seq_prev),
+            sorted.iter().map(|(r, _)| r.seq_prev),
         )),
         Arc::new(arrow::array::Int32Array::from_iter_values(
-            sorted.iter().map(|r| r.side),
+            sorted.iter().map(|(r, _)| r.side),
         )),
-        Arc::new(Int64Array::from_iter_values(sorted.iter().map(|r| r.price))),
-        Arc::new(Int64Array::from_iter_values(sorted.iter().map(|r| r.qty))),
+        Arc::new(Int64Array::from_iter_values(
+            sorted.iter().map(|(r, _)| r.price),
+        )),
+        Arc::new(Int64Array::from_iter_values(
+            sorted.iter().map(|(r, _)| r.qty),
+        )),
         Arc::new(StringArray::from_iter_values(
-            sorted.iter().map(|r| r.conn_id.as_str()),
+            sorted.iter().map(|(r, _)| r.conn_id.as_str()),
+        )),
+        Arc::new(UInt32Array::from_iter_values(
+            sorted.iter().map(|(_, f)| f.bits()),
         )),
     ];
     let batch = RecordBatch::try_new(schema.clone(), cols)
@@ -105,7 +122,7 @@ pub fn write_book_delta(
 pub fn write_trade(
     out_dir: &Path,
     symbol: &str,
-    rows: &[TradeRow],
+    rows: &[(TradeRow, CFlags)],
     date: &str,
     price_scale: u8,
     qty_scale: u8,
@@ -122,26 +139,34 @@ pub fn write_trade(
         Field::new("qty", DataType::Int64, false),
         Field::new("aggressor_side", DataType::Int32, false),
         Field::new("conn_id", DataType::Utf8, false),
+        flags_field(),
     ]));
-    let mut sorted: Vec<&TradeRow> = rows.iter().collect();
-    sorted.sort_by_key(|r| (r.ts_recv, r.trade_id));
+    let mut sorted: Vec<&(TradeRow, CFlags)> = rows.iter().collect();
+    sorted.sort_by_key(|(r, _)| (r.ts_recv, r.trade_id));
     let cols: Vec<ArrayRef> = vec![
         Arc::new(Int64Array::from_iter_values(
-            sorted.iter().map(|r| r.ts_exch),
+            sorted.iter().map(|(r, _)| r.ts_exch),
         )),
         Arc::new(Int64Array::from_iter_values(
-            sorted.iter().map(|r| r.ts_recv),
+            sorted.iter().map(|(r, _)| r.ts_recv),
         )),
         Arc::new(UInt64Array::from_iter_values(
-            sorted.iter().map(|r| r.trade_id),
+            sorted.iter().map(|(r, _)| r.trade_id),
         )),
-        Arc::new(Int64Array::from_iter_values(sorted.iter().map(|r| r.price))),
-        Arc::new(Int64Array::from_iter_values(sorted.iter().map(|r| r.qty))),
+        Arc::new(Int64Array::from_iter_values(
+            sorted.iter().map(|(r, _)| r.price),
+        )),
+        Arc::new(Int64Array::from_iter_values(
+            sorted.iter().map(|(r, _)| r.qty),
+        )),
         Arc::new(arrow::array::Int32Array::from_iter_values(
-            sorted.iter().map(|r| r.aggressor_side),
+            sorted.iter().map(|(r, _)| r.aggressor_side),
         )),
         Arc::new(StringArray::from_iter_values(
-            sorted.iter().map(|r| r.conn_id.as_str()),
+            sorted.iter().map(|(r, _)| r.conn_id.as_str()),
+        )),
+        Arc::new(UInt32Array::from_iter_values(
+            sorted.iter().map(|(_, f)| f.bits()),
         )),
     ];
     let batch = RecordBatch::try_new(schema.clone(), cols)
@@ -163,7 +188,7 @@ pub fn write_trade(
 pub fn write_bbo(
     out_dir: &Path,
     symbol: &str,
-    rows: &[BboRow],
+    rows: &[(BboRow, CFlags)],
     date: &str,
     price_scale: u8,
     qty_scale: u8,
@@ -181,23 +206,29 @@ pub fn write_bbo(
         Field::new("ask_px", DataType::Int64, true),
         Field::new("ask_qty", DataType::Int64, true),
         Field::new("conn_id", DataType::Utf8, false),
+        flags_field(),
     ]));
-    let mut sorted: Vec<&BboRow> = rows.iter().collect();
-    sorted.sort_by_key(|r| (r.ts_recv, r.seq));
+    let mut sorted: Vec<&(BboRow, CFlags)> = rows.iter().collect();
+    sorted.sort_by_key(|(r, _)| (r.ts_recv, r.seq));
     let cols: Vec<ArrayRef> = vec![
         Arc::new(Int64Array::from_iter_values(
-            sorted.iter().map(|r| r.ts_exch),
+            sorted.iter().map(|(r, _)| r.ts_exch),
         )),
         Arc::new(Int64Array::from_iter_values(
-            sorted.iter().map(|r| r.ts_recv),
+            sorted.iter().map(|(r, _)| r.ts_recv),
         )),
-        Arc::new(UInt64Array::from_iter_values(sorted.iter().map(|r| r.seq))),
-        Arc::new(Int64Array::from_iter(sorted.iter().map(|r| r.bid_px))),
-        Arc::new(Int64Array::from_iter(sorted.iter().map(|r| r.bid_qty))),
-        Arc::new(Int64Array::from_iter(sorted.iter().map(|r| r.ask_px))),
-        Arc::new(Int64Array::from_iter(sorted.iter().map(|r| r.ask_qty))),
+        Arc::new(UInt64Array::from_iter_values(
+            sorted.iter().map(|(r, _)| r.seq),
+        )),
+        Arc::new(Int64Array::from_iter(sorted.iter().map(|(r, _)| r.bid_px))),
+        Arc::new(Int64Array::from_iter(sorted.iter().map(|(r, _)| r.bid_qty))),
+        Arc::new(Int64Array::from_iter(sorted.iter().map(|(r, _)| r.ask_px))),
+        Arc::new(Int64Array::from_iter(sorted.iter().map(|(r, _)| r.ask_qty))),
         Arc::new(StringArray::from_iter_values(
-            sorted.iter().map(|r| r.conn_id.as_str()),
+            sorted.iter().map(|(r, _)| r.conn_id.as_str()),
+        )),
+        Arc::new(UInt32Array::from_iter_values(
+            sorted.iter().map(|(_, f)| f.bits()),
         )),
     ];
     let batch = RecordBatch::try_new(schema.clone(), cols)
@@ -219,7 +250,7 @@ pub fn write_bbo(
 pub fn write_mark_price(
     out_dir: &Path,
     symbol: &str,
-    rows: &[MarkPriceRow],
+    rows: &[(MarkPriceRow, CFlags)],
     date: &str,
     price_scale: u8,
     qty_scale: u8,
@@ -235,25 +266,31 @@ pub fn write_mark_price(
         Field::new("index_px", DataType::Int64, true),
         Field::new("rate_e8", DataType::Int64, false),
         Field::new("conn_id", DataType::Utf8, false),
+        flags_field(),
     ]));
-    let mut sorted: Vec<&MarkPriceRow> = rows.iter().collect();
-    sorted.sort_by_key(|r| (r.ts_recv, r.ts_exch));
+    let mut sorted: Vec<&(MarkPriceRow, CFlags)> = rows.iter().collect();
+    sorted.sort_by_key(|(r, _)| (r.ts_recv, r.ts_exch));
     let cols: Vec<ArrayRef> = vec![
         Arc::new(Int64Array::from_iter_values(
-            sorted.iter().map(|r| r.ts_exch),
+            sorted.iter().map(|(r, _)| r.ts_exch),
         )),
         Arc::new(Int64Array::from_iter_values(
-            sorted.iter().map(|r| r.ts_recv),
+            sorted.iter().map(|(r, _)| r.ts_recv),
         )),
         Arc::new(Int64Array::from_iter_values(
-            sorted.iter().map(|r| r.mark_px),
+            sorted.iter().map(|(r, _)| r.mark_px),
         )),
-        Arc::new(Int64Array::from_iter(sorted.iter().map(|r| r.index_px))),
+        Arc::new(Int64Array::from_iter(
+            sorted.iter().map(|(r, _)| r.index_px),
+        )),
         Arc::new(Int64Array::from_iter_values(
-            sorted.iter().map(|r| r.rate_e8),
+            sorted.iter().map(|(r, _)| r.rate_e8),
         )),
         Arc::new(StringArray::from_iter_values(
-            sorted.iter().map(|r| r.conn_id.as_str()),
+            sorted.iter().map(|(r, _)| r.conn_id.as_str()),
+        )),
+        Arc::new(UInt32Array::from_iter_values(
+            sorted.iter().map(|(_, f)| f.bits()),
         )),
     ];
     let batch = RecordBatch::try_new(schema.clone(), cols)
@@ -315,29 +352,30 @@ fn write_batch(
     Ok(())
 }
 
-/// 全部表一次落盘（品种 → 行缓冲 → 各表 parquet）。
+/// 全部表一次落盘（品种 → (行, flags) 缓冲 → 各表 parquet）。
 ///
-/// `date` 决定输出文件名与 `normalize_version` 目录（由调用方组装）。
+/// 输入是清洗后的 [`CleanedTables`]（含标记列）；`date` 决定输出文件名，
+/// 版本与交易所目录段由调用方组装。
 pub fn write_all(
     out_dir: &Path,
-    tables: &crate::normalize::Tables,
+    cleaned: &CleanedTables,
     scales: &HashMap<String, so_core::Scale>,
     date: &str,
 ) -> Result<usize, DataError> {
     let mut total = 0;
-    for (symbol, rows) in &tables.book_delta {
+    for (symbol, rows) in &cleaned.book_delta {
         let (ps, qs) = scales_for(scales, symbol);
         total += write_book_delta(out_dir, symbol, rows, date, ps, qs)?;
     }
-    for (symbol, rows) in &tables.trade {
+    for (symbol, rows) in &cleaned.trade {
         let (ps, qs) = scales_for(scales, symbol);
         total += write_trade(out_dir, symbol, rows, date, ps, qs)?;
     }
-    for (symbol, rows) in &tables.bbo {
+    for (symbol, rows) in &cleaned.bbo {
         let (ps, qs) = scales_for(scales, symbol);
         total += write_bbo(out_dir, symbol, rows, date, ps, qs)?;
     }
-    for (symbol, rows) in &tables.mark_price {
+    for (symbol, rows) in &cleaned.mark_price {
         let (ps, qs) = scales_for(scales, symbol);
         total += write_mark_price(out_dir, symbol, rows, date, ps, qs)?;
     }
