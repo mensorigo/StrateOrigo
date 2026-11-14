@@ -4,13 +4,17 @@
 //! `ts_recv` 归并 → A/B 去重 → Normalizer → 写 Parquet。
 //! 同一天的输入重跑输出逐位一致（文件按固定顺序、行按稳定排序）。
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use so_journal::JournalRow;
 use so_journal::{Dedup, dedup_key_from_frame};
 
+use crate::bookcheck::BookCheck;
 use crate::clean;
+use crate::clean::CFlags;
 use crate::clean::engine::CleanCfg;
+use crate::clean::report::QualityInterval;
 use crate::contracts::parse_contract_snapshots;
 use crate::error::DataError;
 use crate::instrument_out::write_instrument;
@@ -18,9 +22,13 @@ use crate::intervals_out::write_intervals;
 use crate::journal_in::{journal_files, read_journal, valid_date};
 use crate::normalize::{Normalizer, is_data_channel};
 use crate::parquet_out::write_all;
+use crate::rebuild_out::write_rebuild;
 
 /// 规范化版本目录名（docs/06 §6：升级后并存）。
 pub const NORMALIZE_VERSION: &str = "n1";
+
+/// C9 重建一致率阈值（docs/06 §5.3：A 级要求 ≥ 99.9%）。
+const C9_MIN_RATE: f64 = 0.999;
 
 /// 一次 normalize 的统计。
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -93,9 +101,34 @@ pub fn normalize_day(req: &NormalizeRequest<'_>) -> Result<(NormalizeStats, Path
     stats.contracts_failed = contracts_failed;
     stats.instrument_rows = u64::try_from(instrument_rows.len()).unwrap_or(u64::MAX);
 
+    let (cleaned, rebuild) = normalize_rows(&rows, &scales, req, &mut stats);
+
+    let n_root = req.out_root.join(NORMALIZE_VERSION);
+    let out_dir = n_root.join(req.venue);
+    let written = write_all(&out_dir, &cleaned, &scales, req.date)?;
+    write_instrument(&out_dir, &instrument_rows, req.date)?;
+    write_intervals(&n_root, req.venue, req.date, &cleaned.intervals)?;
+    write_rebuild(&n_root, req.venue, req.date, &rebuild)?;
+    stats.event_rows = u64::try_from(written).unwrap_or(u64::MAX);
+    Ok((stats, out_dir))
+}
+
+/// 行流 → (清洗输出, C9 重建统计)。normalize 去重 + C9 回放 + 清洗 + C9 区间。
+fn normalize_rows(
+    rows: &[JournalRow],
+    scales: &HashMap<String, so_core::Scale>,
+    req: &NormalizeRequest<'_>,
+    stats: &mut NormalizeStats,
+) -> (
+    clean::engine::CleanedTables,
+    Vec<(String, crate::bookcheck::SymbolStats)>,
+) {
     let mut normalizer = Normalizer::new(scales.clone());
     let mut dedup = Dedup::new(1_000_000);
-    for row in &rows {
+    // C9 重建验证与 normalize 同吃行流（各自独立去重，互不影响顺序）。
+    let mut bookcheck = BookCheck::new(scales.clone());
+    for row in rows {
+        let _ = bookcheck.on_row(row);
         if !is_data_channel(&row.channel) {
             continue;
         }
@@ -108,19 +141,36 @@ pub fn normalize_day(req: &NormalizeRequest<'_>) -> Result<(NormalizeStats, Path
     }
     stats.parse_failed = normalizer.parse_failed;
     stats.no_scale = normalizer.no_scale;
+    let rebuild = bookcheck.stats();
 
     // 清洗阶段：normalize 后、写盘前。只加标记不删数据（C6 唯一例外，
     // 非法值行剔除并计数——docs/06 §5.2）；区间表与统计一起产出。
-    let cleaned = clean::engine::clean_tables(&normalizer.tables, req.venue, &CleanCfg::default());
+    let mut cleaned =
+        clean::engine::clean_tables(&normalizer.tables, req.venue, &CleanCfg::default());
+    c9_intervals(req.venue, &rebuild, &mut cleaned.intervals);
     stats.clean = cleaned.stats;
+    (cleaned, rebuild)
+}
 
-    let n_root = req.out_root.join(NORMALIZE_VERSION);
-    let out_dir = n_root.join(req.venue);
-    let written = write_all(&out_dir, &cleaned, &scales, req.date)?;
-    write_instrument(&out_dir, &instrument_rows, req.date)?;
-    write_intervals(&n_root, req.venue, req.date, &cleaned.intervals)?;
-    stats.event_rows = u64::try_from(written).unwrap_or(u64::MAX);
-    Ok((stats, out_dir))
+/// C9：重建一致率低于阈值的品种标区间（docs/06 §5.2，阈值 = A 级重建
+/// 一致率门槛 99.9%；无比对样本不标——评级按 1.0 处理）。
+fn c9_intervals(
+    venue: &str,
+    rebuild: &[(String, crate::bookcheck::SymbolStats)],
+    out: &mut Vec<QualityInterval>,
+) {
+    for (symbol, st) in rebuild {
+        if st.comparisons > 0 && st.snapshot_rate() < C9_MIN_RATE {
+            out.push(QualityInterval {
+                venue: venue.to_owned(),
+                symbol: symbol.clone(),
+                channel: "rest.order_book".into(),
+                ts_start: st.first_cmp_ts,
+                ts_end: st.last_cmp_ts + 1,
+                flags: CFlags::BOOK_REBUILD_MISMATCH.bits(),
+            });
+        }
+    }
 }
 
 /// 供 `so-cli data ls` 使用：列出规范化输出中的 Parquet 文件。
@@ -192,7 +242,7 @@ mod tests {
         assert_eq!(s1.event_rows, 1);
         assert_eq!(s1.instrument_rows, 1);
         let files = list_parquet(&root.join("parquet"));
-        assert_eq!(files.len(), 3); // book_delta + instrument + quality_intervals
+        assert_eq!(files.len(), 4); // book_delta + instrument + quality_intervals + quality_rebuild
         let bytes1 = std::fs::read(&files[0]).unwrap();
         let _ = normalize_day(&req).unwrap();
         let bytes2 = std::fs::read(&files[0]).unwrap();

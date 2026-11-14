@@ -12,6 +12,7 @@ publish.workspace = true
 so-core.workspace = true
 so-model.workspace = true
 so-adapter-gate.workspace = true
+so-book.workspace = true
 so-journal.workspace = true
 thiserror.workspace = true
 serde_json.workspace = true
@@ -24,6 +25,13 @@ zstd = "0.13.3"
 # Parquet（docs/06 §4.1 统一表；zstd 压缩）
 arrow = "60.1.0"
 parquet = { version = "60.1.0", features = ["arrow", "zstd"] }
+
+[dev-dependencies]
+# book-check example：离线报告工具（拉 REST 合约元数据、解压 Journal）。
+# 只进 example，不进 lib 与测试（A6：冷路径网络依赖，用途见文件头）。
+tokio = { version = "1.51.1", features = ["rt", "macros", "time"] }
+reqwest = { version = "0.13.1", default-features = false, features = ["json", "rustls", "http2"] }
+zstd = "0.13.3"
 
 [lints]
 workspace = true

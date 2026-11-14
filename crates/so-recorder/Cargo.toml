@@ -13,7 +13,6 @@ publish.workspace = true
 so-core.workspace = true
 so-model.workspace = true
 so-adapter-gate.workspace = true
-so-book.workspace = true
 so-telemetry.workspace = true
 so-journal.workspace = true
 thiserror.workspace = true

@@ -495,6 +495,9 @@ report = validation.full_report(study)   # PBO、DSR、SPA、成本敏感性、�
 | `so-data::normalize` | 各交易所原始消息 → 统一事件（`so-model::MarketEvent`），定点化 | 已建 |
 | `so-data::parquet_out` / `instrument_out` | Parquet 落盘与 schema（分区布局、数据集哈希） | 已建 |
 | `so-data::pipeline` | 按日编排：列出 Journal → 读取 → 归并去重 → 规范化 → 落盘 | 已建 |
+| `so-data::bookcheck` | C9 订单簿重建验证（REST 快照比对，前 N 档一致率）；2026-11-13 自 so-recorder 归位 | 已建 |
+| `so-data::intervals_out` / `rebuild_out` | `quality_intervals` / `quality_rebuild` 区间与验证表落盘 | 已建 |
+| `so-data::quality_scan` | 读回 Parquet 产出 `(venue, symbol)` 评级输入（`data check` 算法层） | 已建 |
 | `so-data::error` | 数据域错误枚举与 `code()`（`Data*`） | 已建 |
 | `so-data::clean` | 清洗规则引擎（C1–C13，见 06 §5），只加标记不删数据，输出清洗报告 | **规划**（M2 后段） |
 | `so-data::store` | 数据集清单与哈希（`data/datasets/<hash>.toml`） | **规划** |
@@ -518,10 +521,14 @@ report = validation.full_report(study)   # PBO、DSR、SPA、成本敏感性、�
 | `so-recorder::journal` / `dedup` / `hash` | **重新导出** `so-journal` 的类型与函数（`lib.rs` 内的 `pub use` 兼容模块，非独立文件），让既有 `crate::journal::X` 调用点不必改写 |
 | `so-recorder::snapshot` / `snapshot_pull` | 定时拉取 REST 快照（可达性校验，06 §3.2 A6） |
 | `so-recorder::silence` / `alert` | 静默检测（连接在但不推数据）与告警 |
-| `so-recorder::bookcheck` | 回放录制数据重建订单簿的自检（06 §9） |
 | `so-recorder::config` / `timefmt` | 录制配置解析与时间格式化 |
 | `so-recorder::download` / `download_run` | 官方历史数据下载（Gate REST）与编排 |
 | `so-recorder::error` | 录制域错误枚举与 `code()`（`Recorder*`，转发 `Journal*`） |
+
+> `bookcheck`（C9 订单簿重建验证）原在本 crate，2026-11-13 归位
+> `so-data::bookcheck`——它是纯离线分析，随清洗链路走（pipeline 在
+> normalize 时产出 `quality_rebuild` 表与 C9 区间）；离线工具
+> `book-check` 也随迁 `crates/so-data/examples/`。
 
 ## 11. 控制面与客户端接口预留（so-proto）
 

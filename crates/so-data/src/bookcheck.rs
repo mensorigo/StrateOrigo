@@ -3,24 +3,24 @@
 //! 从 Raw Journal 回放 `futures.order_book_update` 增量，用
 //! [`GateBookBuilder`]（六步法）逐品种重建订单簿；在每个
 //! `rest.order_book` 快照时点比对**前 N 档**，统计一致率。
+//! 由 [`crate::pipeline`] 在清洗阶段调用，结果落 `quality_rebuild` 表
+//! 并按 docs/06 C9 标记区间（重构自 so-recorder，ADR-0016 下沉手法）。
 //!
 //! 比对时点：快照行到达时增量可能已越过 `snapshot_id`，因此设为待
 //! 比对目标，在**首次应用完 `last_id ≥ snapshot_id` 的增量帧后**比对
 //! （穿越帧整帧应用，少量越过属可接受近似），随后以该快照重新锚定
 //! （`apply_snapshot`）——与实盘 Gap 重建路径同构。
 //!
-//! A/B 双流同一帧都会落 Journal（frame.rs 先落盘再去重），回放端
+//! A/B 双流同一帧都会落 Journal（录制端先落盘再去重），回放端
 //! 用 [`Dedup`] 以同样键去重，保证重建确定性。
 
 use std::collections::HashMap;
 
-use so_adapter_gate::{ObuLevel, RawObu, parse_obu, parse_order_book_rest};
+use so_adapter_gate::{ObuLevel, RawObu, RawSnapshot, parse_obu, parse_order_book_rest};
 use so_book::{BookError, GateBookBuilder, Level};
 use so_core::{InstrumentId, Price, Qty, Scale, UnixNanos};
+use so_journal::{Dedup, JournalRow, dedup_key_from_frame};
 use so_model::BookDelta;
-
-use crate::dedup::{Dedup, dedup_key_from_frame};
-use crate::journal::JournalRow;
 
 /// 比对的前 N 档（验收标准：N=20）。
 pub const COMPARE_DEPTH: usize = 20;
@@ -45,6 +45,9 @@ pub struct SymbolStats {
     pub parse_failed: u64,
     /// 缺精度元数据而跳过的帧数。
     pub no_scale: u64,
+    /// 首次/末次比对的快照 `ts_recv`（无比对时为 0；C9 区间用）。
+    pub first_cmp_ts: i64,
+    pub last_cmp_ts: i64,
 }
 
 impl SymbolStats {
@@ -69,6 +72,7 @@ impl SymbolStats {
 #[derive(Debug)]
 struct PendingSnapshot {
     snapshot_id: u64,
+    ts_recv: i64,
     bids: Vec<(Price, Qty)>,
     asks: Vec<(Price, Qty)>,
 }
@@ -131,7 +135,7 @@ impl SymbolReplay {
     /// 帧应用**前**检查待比对快照：若帧起始 ID 已越过快照 id，簿状态
     /// 正好等于快照时点（穿越帧未应用），在此比对。
     ///
-    /// 簇无效（Gap 作废）时不比对——无效簿与快照的差异是数据缺失的
+    /// 簿无效（Gap 作废）时不比对——无效簿与快照的差异是数据缺失的
     /// 结果而非重建错误；此时快照用作重锚（六步法第 1 步），计 Gap。
     fn maybe_compare(&mut self, incoming_first: u64) {
         let Some(p) = self.pending.take() else {
@@ -160,6 +164,10 @@ impl SymbolReplay {
     /// 增量全部 StaleSnapshot）。簿无效路径在 [`Self::maybe_compare`]。
     fn compare(&mut self, p: PendingSnapshot) {
         self.stats.comparisons = self.stats.comparisons.saturating_add(1);
+        if self.stats.first_cmp_ts == 0 {
+            self.stats.first_cmp_ts = p.ts_recv;
+        }
+        self.stats.last_cmp_ts = p.ts_recv;
         let bid_ok = compare_side(self.builder.book().bids().levels(), &p.bids);
         let ask_ok = compare_side(self.builder.book().asks().levels(), &p.asks);
         let n_total = (p.bids.len() + p.asks.len()).min(COMPARE_DEPTH * 2);
@@ -273,6 +281,7 @@ impl BookCheck {
         } else {
             replay.pending = Some(PendingSnapshot {
                 snapshot_id: snap.snapshot_id,
+                ts_recv: snap.ts_recv.0,
                 bids: level_pairs(snap.bids.as_slice()),
                 asks: level_pairs(snap.asks.as_slice()),
             });
@@ -283,7 +292,7 @@ impl BookCheck {
 
 impl SymbolReplay {
     /// 用快照锚定（首个，或 Gap 后重建）。
-    fn start_from(&mut self, snap: so_adapter_gate::RawSnapshot) {
+    fn start_from(&mut self, snap: RawSnapshot) {
         let LevelPairs(bids, asks) = level_pairs_all(&snap);
         match self.builder.apply_snapshot(snap.snapshot_id, &bids, &asks) {
             Ok(()) => self.started = true,
@@ -317,7 +326,7 @@ fn level_pairs(levels: &[ObuLevel]) -> Vec<(Price, Qty)> {
 }
 
 /// 快照 → (bids, asks) 档位对。
-fn level_pairs_all(snap: &so_adapter_gate::RawSnapshot) -> LevelPairs {
+fn level_pairs_all(snap: &RawSnapshot) -> LevelPairs {
     LevelPairs(
         snap.bids
             .as_slice()

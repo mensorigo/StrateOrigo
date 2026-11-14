@@ -3,7 +3,8 @@
 //! 读 Raw Journal（增量 + rest.order_book 快照），用 BookCheck 重建比对，
 //! 输出每品种的快照级/档级一致率与缺口计数。
 //!
-//! 价格精度来源与 bench-parse 相同（REST 合约元数据；失败回退 scale 4）。
+//! 价格精度来源：优先读 `data/parquet/n1/instrument`（若有），否则拉
+//! REST 合约元数据（3 次重试），再退 scale 4。
 //!
 //! 用法：book-check <file.zst>... [--json]
 //! 退出码：0 = 全部品种快照级一致率 ≥ 99.9%；1 = 有品种不达标；2 = 参数错误。
@@ -15,8 +16,8 @@ use std::fs::File;
 use std::io::Read;
 
 use so_core::Scale;
-use so_recorder::JournalRow;
-use so_recorder::bookcheck::{BookCheck, SymbolStats};
+use so_data::bookcheck::{BookCheck, SymbolStats};
+use so_journal::JournalRow;
 
 /// M2 验收阈值（快照级一致率）。
 const THRESHOLD: f64 = 0.999;
@@ -79,6 +80,8 @@ fn read_file(path: &str, rows: &mut Vec<JournalRow>) {
 }
 
 /// 启动时拉合约元数据建 scale 映射（带 3 次重试；失败回退固定 4）。
+///
+/// 这是离线报告工具（examples 不进 CI 测试），允许直接走网络。
 fn load_scales() -> (HashMap<String, Scale>, &'static str) {
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()

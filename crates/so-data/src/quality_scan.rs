@@ -35,6 +35,7 @@ pub fn scan_day(n_root: &Path, date: &str) -> Result<ScanResult, DataError> {
     let venues = list_venues(n_root)?;
     for venue in venues {
         absorb_intervals(n_root, &venue, date, &mut out)?;
+        absorb_rebuild(n_root, &venue, date, &mut out)?;
         scan_tables(n_root, &venue, date, &mut out)?;
     }
     Ok(out)
@@ -50,6 +51,7 @@ fn list_venues(n_root: &Path) -> Result<Vec<String>, DataError> {
         if e.path().is_dir()
             && let Some(name) = e.file_name().to_str()
             && name != "quality_intervals"
+            && name != "quality_rebuild"
         {
             out.push(name.to_owned());
         }
@@ -91,6 +93,44 @@ fn absorb_intervals(
                 cell.gap_total_ns += end.value(i) - start.value(i);
             }
             out.intervals += 1;
+        }
+    }
+    Ok(())
+}
+
+/// 读 quality_rebuild 表填 `rebuild_match_rate`（无比对样本的品种保持 None，
+/// 评级按 1.0 处理——docs/06 §5.3）。
+fn absorb_rebuild(
+    n_root: &Path,
+    venue: &str,
+    date: &str,
+    out: &mut ScanResult,
+) -> Result<(), DataError> {
+    let path = n_root
+        .join("quality_rebuild")
+        .join(venue)
+        .join(format!("{date}.parquet"));
+    let Ok(file) = std::fs::File::open(&path) else {
+        return Ok(()); // 无文件 = 当天无 REST 快照（如纯 WS 录制日）
+    };
+    let reader = ParquetRecordBatchReaderBuilder::try_new(file)
+        .map_err(|e| DataError::Parquet(e.to_string()))?
+        .build()
+        .map_err(|e| DataError::Parquet(e.to_string()))?;
+    for b in reader {
+        let b = b.map_err(|e| DataError::Parquet(e.to_string()))?;
+        let sym = string_col(&b, "symbol")?;
+        let comparisons = u64_col(&b, "comparisons")?;
+        let rate = f64_col(&b, "snapshot_rate")?;
+        for i in 0..b.num_rows() {
+            if comparisons.value(i) == 0 {
+                continue; // 无比对样本：rebuild_match_rate 保持 None
+            }
+            let cell = out
+                .cells
+                .entry((venue.to_owned(), sym.value(i).to_owned()))
+                .or_default();
+            cell.rebuild_match_rate = Some(rate.value(i));
         }
     }
     Ok(())
@@ -181,6 +221,32 @@ fn u32_col<'a>(
         .and_then(|c| {
             (c.data_type() == &DataType::UInt32)
                 .then(|| c.as_any().downcast_ref::<arrow::array::UInt32Array>())
+                .flatten()
+        })
+        .ok_or_else(|| DataError::Parquet(format!("{name} 列缺失或类型不符")))
+}
+
+fn u64_col<'a>(
+    b: &'a arrow::record_batch::RecordBatch,
+    name: &str,
+) -> Result<&'a arrow::array::UInt64Array, DataError> {
+    b.column_by_name(name)
+        .and_then(|c| {
+            (c.data_type() == &DataType::UInt64)
+                .then(|| c.as_any().downcast_ref::<arrow::array::UInt64Array>())
+                .flatten()
+        })
+        .ok_or_else(|| DataError::Parquet(format!("{name} 列缺失或类型不符")))
+}
+
+fn f64_col<'a>(
+    b: &'a arrow::record_batch::RecordBatch,
+    name: &str,
+) -> Result<&'a arrow::array::Float64Array, DataError> {
+    b.column_by_name(name)
+        .and_then(|c| {
+            (c.data_type() == &DataType::Float64)
+                .then(|| c.as_any().downcast_ref::<arrow::array::Float64Array>())
                 .flatten()
         })
         .ok_or_else(|| DataError::Parquet(format!("{name} 列缺失或类型不符")))

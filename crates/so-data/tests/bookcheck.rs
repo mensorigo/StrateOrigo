@@ -1,12 +1,12 @@
 //! BookCheck 集成测试（docs/05 M2 验收：重建簿 vs REST 快照）。
 //!
-//! 与 src 单测同数据流；放在 tests/ 满足单文件 ≤400 行（docs/04 F1）。
+//! 从 so-recorder 迁来（C9 归位 so-data，2026-11-13）；数据流不变。
 
 use std::collections::HashMap;
 
 use so_core::Scale;
-use so_recorder::JournalRow;
-use so_recorder::bookcheck::{BookCheck, SymbolStats};
+use so_data::bookcheck::{BookCheck, SymbolStats};
+use so_journal::JournalRow;
 
 fn row(channel: &str, symbol: &str, raw: &str, ts_recv: i64) -> JournalRow {
     JournalRow {
@@ -79,6 +79,9 @@ fn rebuild_matches_snapshot() {
     assert_eq!(s.comparisons, 1);
     assert_eq!(s.matched, 1);
     assert_eq!(s.level_rate(), 1.0);
+    // 比对时间窗记录（C9 区间用）
+    assert_eq!(s.first_cmp_ts, 120);
+    assert_eq!(s.last_cmp_ts, 120);
     // 重锚后增量继续应用
     c.on_row(&row(
         "futures.order_book_update",
