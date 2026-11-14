@@ -498,6 +498,7 @@ report = validation.full_report(study)   # PBO、DSR、SPA、成本敏感性、�
 | `so-data::bookcheck` | C9 订单簿重建验证（REST 快照比对，前 N 档一致率）；2026-11-13 自 so-recorder 归位 | 已建 |
 | `so-data::intervals_out` / `rebuild_out` | `quality_intervals` / `quality_rebuild` 区间与验证表落盘 | 已建 |
 | `so-data::quality_scan` | 读回 Parquet 产出 `(venue, symbol)` 评级输入（`data check` 算法层） | 已建 |
+| `so-data::dataset` / `dataset_out` | 数据集清单模型、文件摘要与哈希（docs/06 §7）、toml 落盘 | 已建 |
 | `so-data::error` | 数据域错误枚举与 `code()`（`Data*`） | 已建 |
 | `so-data::clean` | 清洗规则引擎（C1–C13，见 06 §5），只加标记不删数据，输出清洗报告 | **规划**（M2 后段） |
 | `so-data::store` | 数据集清单与哈希（`data/datasets/<hash>.toml`） | **规划** |

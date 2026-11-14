@@ -30,7 +30,9 @@ pub fn run() -> ExitCode {
     }
     let manifests = list_toml(Path::new(DATASETS_DIR));
     for f in &manifests {
-        tracing::info!(path = %f.display(), "dataset");
+        // 文件名即数据集哈希（docs/06 §7：回测只引用哈希）。
+        let hash = f.file_stem().and_then(|s| s.to_str()).unwrap_or("?");
+        tracing::info!(dataset_hash = hash, path = %f.display(), "dataset");
     }
     tracing::info!(
         parquet = files.len(),

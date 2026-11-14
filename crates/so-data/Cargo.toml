@@ -22,6 +22,9 @@ tracing.workspace = true
 # Raw Journal 读取（与写入端共用 so-journal 的 zstd 版本）
 zstd = "0.13.3"
 
+# 数据集哈希（docs/06 §7；与 so-journal 同一 sha2 版本）
+sha2 = "0.10.9"
+
 # Parquet（docs/06 §4.1 统一表；zstd 压缩）
 arrow = "60.1.0"
 parquet = { version = "60.1.0", features = ["arrow", "zstd"] }

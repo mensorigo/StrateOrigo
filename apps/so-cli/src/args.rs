@@ -95,11 +95,17 @@ pub enum DataCommand {
         #[arg(long)]
         date: String,
     },
-    /// 清洗与质量检查。
+    /// 清洗与质量检查；`--dataset` 顺带生成数据集清单（docs/06 §7）。
     Check {
         /// 日期 YYYY-MM-DD。
         #[arg(long)]
         date: String,
+        /// 生成数据集清单到 data/datasets/<hash>.toml。
+        #[arg(long)]
+        dataset: bool,
+        /// 数据集名（--dataset 时必填）。
+        #[arg(long, requires = "dataset")]
+        name: Option<String>,
     },
     /// 数据集列表与哈希。
     Ls,

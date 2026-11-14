@@ -4,7 +4,9 @@
 //! `contracts`（品种元数据）→ `bookcheck`（C9 订单簿重建验证）→
 //! `normalize`（统一事件）→ `clean`（清洗标记，C1–C13，只加标记不删数据）→
 //! `parquet_out`（Parquet 写出，含 flags 列）→
-//! `intervals_out`（quality_intervals 区间表）→ `pipeline`（按日端到端编排）。
+//! `intervals_out`（quality_intervals 区间表）→
+//! `dataset`/`dataset_out`（数据集清单与哈希，docs/06 §7）→
+//! `pipeline`（按日端到端编排）。
 //! 存储布局与数据集哈希见 docs/06 §6–§7。
 //!
 //! 本 crate 是**冷路径**（本地批处理工具），允许堆分配与阻塞 I/O。
@@ -12,6 +14,8 @@
 pub mod bookcheck;
 pub mod clean;
 pub mod contracts;
+pub mod dataset;
+pub mod dataset_out;
 pub mod error;
 pub mod instrument_out;
 pub mod intervals_out;

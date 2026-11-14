@@ -34,8 +34,12 @@ pub fn run(command: Command) -> ExitCode {
         Command::Data(DataCommand::Normalize { date }) => {
             return crate::data_normalize::run(&date);
         }
-        Command::Data(DataCommand::Check { date }) => {
-            return crate::data_check::run(&date);
+        Command::Data(DataCommand::Check {
+            date,
+            dataset,
+            name,
+        }) => {
+            return crate::data_check::run(&date, dataset, name.as_deref());
         }
         Command::Data(DataCommand::Ls) => return crate::data_ls::run(),
         Command::Bt { .. } | Command::Exp(_) => "M3",
