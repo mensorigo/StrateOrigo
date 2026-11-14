@@ -107,6 +107,18 @@ pub enum DataCommand {
         #[arg(long, requires = "dataset")]
         name: Option<String>,
     },
+    /// 从 trade Parquet 生成 Bar（docs/06 §8 派生数据）。
+    Bar {
+        /// 日期 YYYY-MM-DD。
+        #[arg(long)]
+        date: String,
+        /// Bar 类型：time | volume | notional。
+        #[arg(long)]
+        kind: String,
+        /// 时间 Bar 的周期（ns，如 60000000000 = 1m）；成交量/成交额 Bar 的阈值。
+        #[arg(long)]
+        value: i64,
+    },
     /// 数据集列表与哈希。
     Ls,
 }

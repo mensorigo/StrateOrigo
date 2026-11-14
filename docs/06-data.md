@@ -169,6 +169,7 @@ data/
 ├─ vendor/{tardis|okx-hist|gate-hist|...}/...          # 第三方原始文件（不可变）+ 来源记录
 ├─ parquet/{normalize_version}/{venue}/{table}/{symbol}/{YYYY-MM-DD}.parquet   # 数据表含 flags 列
 ├─ parquet/{normalize_version}/quality_intervals/{venue}/{YYYY-MM-DD}.parquet # 区间级异常
+├─ parquet/{normalize_version}/{venue}/bar/{kind}/{tag}/{symbol}/{YYYY-MM-DD}.parquet # 派生 Bar
 ├─ quality/{YYYY-MM-DD}.md                                 # 每日质量报告（data check 产出）
 ├─ meta/instruments.parquet                             # 时点元数据
 ├─ datasets/{dataset_hash}.toml                         # 数据集清单（不可变）
@@ -177,6 +178,7 @@ data/
 
 - Parquet：zstd 压缩；按 `ts_recv` 排序；行组大小按"一次回测流式读取"调优（实测确定）。
 - `normalize_version` / `clean_version` 升级后**并存**，旧实验仍能引用旧版本复现。
+- Bar 路径 `{kind}` ∈ `time|volume|notional`；`{tag}` 时间 Bar 为纳秒数（如 `60000000000` = 1m），量/额 Bar 为阈值（如 `vol100` / `notional1000000`）。
 
 ## 7. 数据集与版本
 
@@ -206,9 +208,9 @@ files = 3542
 ## 8. 数据访问
 
 - **Rust 回测读取**：按块流式读取多个表，按 `(ts_recv, 表优先级, 序号)` 多路归并为单一事件流，内存占用与时间跨度无关。
-- **Python 研究读取**：`strateorigo.data.load(dataset_hash)` 返回 Polars LazyFrame；默认附带 `flags`，并提供 `.exclude_flagged()`。
-- **派生数据**：由逐笔生成时间 Bar、成交量 Bar、成交额 Bar、tick 失衡 Bar；生成结果也是带版本的数据集。
-- **对齐工具**：多品种 / 多交易所按时间 as-of join（只用"当时已知"的数据，防止未来函数）。
+- **Python 研究读取**：`strateorigo.data.load(dataset_hash)` 返回文件清单 dict（含 hash/name/min_grade/start/end/files），Python 侧用 Polars `scan_parquet` 组装 LazyFrame；`.exclude_flagged()` 留到零拷贝 Arrow 直传（M4 随 `backtest.run()` 上线）。
+- **派生数据**：由逐笔生成时间 Bar、成交量 Bar、成交额 Bar、tick 失衡 Bar；生成结果也是带版本的数据集。`so-cli data bar --date YYYY-MM-DD --kind time|volume|notional --value N` 生成并落盘到 `parquet/{n}/{venue}/bar/{kind}/{tag}/{symbol}/{date}.parquet`。
+- **对齐工具**：`strateorigo.data.asof_join(left, right, by=...)` 多品种 / 多交易所按时间 as-of join（只用"当时已知"的数据，防止未来函数）。
 
 ## 9. 数据层验收与注意事项
 

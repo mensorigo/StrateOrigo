@@ -41,6 +41,9 @@ pub fn run(command: Command) -> ExitCode {
         }) => {
             return crate::data_check::run(&date, dataset, name.as_deref());
         }
+        Command::Data(DataCommand::Bar { date, kind, value }) => {
+            return crate::data_bar::run(&date, &kind, value);
+        }
         Command::Data(DataCommand::Ls) => return crate::data_ls::run(),
         Command::Bt { .. } | Command::Exp(_) => "M3",
         Command::Strategy { .. } => "M4",
