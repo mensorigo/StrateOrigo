@@ -14,9 +14,18 @@ pub const DATASETS_DIR: &str = "data/datasets";
 
 /// 写出清单，返回数据集哈希与文件路径。
 pub fn write_manifest(m: &DatasetManifest) -> Result<(String, PathBuf), DataError> {
+    write_manifest_at(m, Path::new("."))
+}
+
+/// 写出清单到指定工作根（测试与嵌套部署用；`write_manifest` 即
+/// `write_manifest_at(m, ".")`，落默认 `data/datasets/`）。
+pub fn write_manifest_at(
+    m: &DatasetManifest,
+    workspace_root: &Path,
+) -> Result<(String, PathBuf), DataError> {
     let hash = dataset_hash(m);
-    let dir = Path::new(DATASETS_DIR);
-    std::fs::create_dir_all(dir).map_err(|e| DataError::Parquet(format!("建目录失败：{e}")))?;
+    let dir = workspace_root.join(DATASETS_DIR);
+    std::fs::create_dir_all(&dir).map_err(|e| DataError::Parquet(format!("建目录失败：{e}")))?;
     let path = dir.join(format!("{hash}.toml"));
     std::fs::write(&path, render_toml(m))
         .map_err(|e| DataError::Parquet(format!("写清单失败：{e}")))?;

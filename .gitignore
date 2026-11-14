@@ -25,6 +25,8 @@ __pycache__/
 .venv/
 venv/
 *.pdb                # maturin develop 生成的调试符号，不进仓库
+*.pyd                # maturin develop 生成的扩展模块，不进仓库
+*.so
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/

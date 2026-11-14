@@ -17,6 +17,7 @@ so-journal.workspace = true
 thiserror.workspace = true
 serde_json.workspace = true
 serde.workspace = true
+toml = "1.1.1"
 tracing.workspace = true
 
 # Raw Journal 读取（与写入端共用 so-journal 的 zstd 版本）

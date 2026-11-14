@@ -13,6 +13,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 so-core.workspace = true
+so-data.workspace = true
 pyo3.workspace = true
 
 [lints]

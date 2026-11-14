@@ -2335,6 +2335,7 @@ dependencies = [
  "so-model",
  "thiserror",
  "tokio",
+ "toml",
  "tracing",
  "zstd 0.13.4",
 ]
@@ -2365,6 +2366,7 @@ version = "0.1.0"
 dependencies = [
  "pyo3",
  "so-core",
+ "so-data",
 ]
 
 [[package]]

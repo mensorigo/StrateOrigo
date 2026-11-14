@@ -15,6 +15,7 @@ pub mod bookcheck;
 pub mod clean;
 pub mod contracts;
 pub mod dataset;
+pub mod dataset_in;
 pub mod dataset_out;
 pub mod error;
 pub mod instrument_out;
